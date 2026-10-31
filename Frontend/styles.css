@@ -442,3 +442,9 @@ h1 {
   color: #d1d5db;
   line-height: 1.4;
 }
+/* Keyboard focus and button-based cards */
+button:focus-visible, select:focus-visible, input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+button.overview-card { font: inherit; color: inherit; }

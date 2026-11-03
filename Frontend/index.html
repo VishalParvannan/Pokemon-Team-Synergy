@@ -15,13 +15,12 @@
       <div class="lens"></div>
       <h1>Team Synergy<br/>Analyzer</h1>
     </header>
-    <p class="subtitle" id="subtitle">Build a team, configure level, nature, IVs and EVs, and analyze type synergy. Format legality is not checked.</p>
-    <div id="statusMessage" role="status" aria-live="polite" style="min-height:20px; margin-bottom:8px; font-size:13px; color: var(--text-muted);"></div>
+    <p class="subtitle" id="subtitle">Build your competitive team using interactive dropdowns, configure stats, and analyze synergy.</p>
 
     <!-- Controls Row -->
     <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
       <button type="button" id="randomTeamBtn" class="submit-button" style="padding: 10px 18px; border-radius: 8px;">
-        🎲 Random Team
+        🎲 Random Valid Team
       </button>
       <button type="button" id="clearTeamBtn" class="submit-button" style="padding: 10px 18px; border-radius: 8px; background: var(--panel);">
         Clear Team
@@ -45,7 +44,7 @@
 
     <div class="analyze-row">
       <button type="button" id="analyzeBtn" class="submit-button">
-        <img src="../Images/pokeball.png" alt="Pokeball" style="width: 18px; height: 18px; object-fit: contain; display: inline-block;" />
+        <img src="Images/pokeball.png" alt="Pokeball" style="width: 18px; height: 18px; object-fit: contain; display: inline-block;" />
         Analyze Team Synergy
       </button>
     </div>
@@ -82,7 +81,12 @@
             <span class="metric-val" id="valCompleteness">0</span>
           </div>
           <div class="metric-row">
-            <span>Moveset Completeness</span>
+            <span>Speed & Power</span>
+            <div class="bar-track"><div class="bar-fill" id="barSpeed" style="width: 0%;"></div></div>
+            <span class="metric-val" id="valSpeed">0</span>
+          </div>
+          <div class="metric-row">
+            <span>Build Quality</span>
             <div class="bar-track"><div class="bar-fill" id="barBuild" style="width: 0%;"></div></div>
             <span class="metric-val" id="valBuild">0</span>
           </div>
@@ -100,36 +104,29 @@
         </div>
 
         <div class="report-card">
-          <h3>Weaknesses (by type)</h3>
+          <h3>Biggest Weaknesses</h3>
           <ul class="stat-list" id="weaknessesList"></ul>
         </div>
 
         <div class="report-card">
-          <h3>Resistances (by type)</h3>
+          <h3>Best Resistances</h3>
           <ul class="stat-list" id="resistancesList"></ul>
         </div>
 
         <div class="report-card">
-          <h3>Type Immunities</h3>
-          <ul class="stat-list" id="immunitiesList"></ul>
-        </div>
-
-        <div class="report-card">
-          <h3>Speed Tiers (calculated)</h3>
+          <h3>Speed Tiers</h3>
           <ul class="stat-list" id="speedTiersList"></ul>
         </div>
       </div>
 
       <!-- Bottom Recommendations: What to do next -->
       <div class="next-steps-container">
-        <h3>Observations</h3>
+        <h3>What to do next</h3>
         <div class="recommendations-list" id="recommendationsList"></div>
-        <p class="sub-text" style="margin-top:12px;">The score is a simple average of four heuristics: share of types hit super-effectively by selected damaging moves, a penalty for types that hit two or more members without enough resists, how many of six slots are filled, and how many move slots are filled. It ignores abilities, items, roles, speed and format rules, so treat it as a rough checklist only.</p>
       </div>
     </div>
   </div>
 
-  <script src="logic.js"></script>
   <script src="pokemon.js"></script>
 </body>
 </html>

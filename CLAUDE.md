@@ -3,23 +3,19 @@
 ## Purpose
 Build a trustworthy, approachable Pokémon team builder that helps players understand their teams and improve them. Prioritize correct, explainable analysis. Choose and disclose the supported game generation and competitive format before making legality or strategic claims.
 
-## Current project (reviewed October 2026)
-- `Frontend/index.html`: main team builder and report interface.
-- `Frontend/pokemon.js`: state, PokeAPI requests, editor rendering, random team generation, and analysis.
-- `Frontend/styles.css`: dark theme and layout.
-- `Frontend/stats.html`: empty.
-- `Images/`: local artwork. The page references `Images/pokeball.png` relative to `Frontend/`, but the image is in the root `Images/` directory; verify and fix the path.
-- Static browser HTML, CSS and JavaScript. No package manifest, backend, build system or automated tests were found. PokeAPI and Google Fonts require network access.
+## Current project (updated November 2026)
+- `Frontend/index.html` + `pokemon.js`: builder page and controller (state, persistence, team management, editor, validation and analysis flow).
+- `Frontend/logic.js`: type chart, stat formula, EVs, format species filtering (pure).
+- `Frontend/formats.js`: format definitions (species, forms, era, learnset version groups, clauses).
+- `Frontend/team.js`: slot/team model, versioned multi-team store + v1 migration, rule validation, Showdown/JSON import-export (pure).
+- `Frontend/analysis.js`: ability/item-aware defense, coverage, roles, speed, checklist score, observations (pure).
+- `Frontend/api.js`: PokeAPI fetch with retry, caches, response parsers.
+- `Frontend/controls.js`, `report.js`: DOM widgets and report rendering.
+- `Frontend/stats.html` + `stats.js`: saved teams page.
+- `tests/*.test.js`: `node --test tests/*.test.js`. `.claude/launch.json` serves the repo on port 8090.
 
-## What exists
-- Six team slots, an overview and individual editing tabs.
-- PokeAPI supplies lists (limited to 900 Pokémon and 1,000 items), sprites, abilities, base stats and move pools.
-- Ability and item selection, up to four distinct moves, and EV sliders and number inputs. IVs exist in state but have no editor; nature and level are not configurable.
-- Random team generation and clearing the team.
-- A report with estimated offensive coverage, weaknesses and resistances, speed tiers, component scores, an overall grade and suggestions. These are preliminary heuristics, not validated competitive analysis.
-
-## Status (updated after first improvement pass)
-Done: complete type chart + tests (`Frontend/logic.js`, `tests/logic.test.js`), pokeball path, move-based coverage, level/nature/IV controls with calculated stats, enforced EV cap, fetch retry/pagination/race guards, escaped API HTML, localStorage persistence, stale-report hiding, clear confirmation, README. Not yet done: format/generation selection and legality, species forms, multiple named teams, import/export, searchable selectors, further modularization (API/state/rendering), UI/keyboard/mobile manual checks, `stats.html`. Item list is still unfiltered.
+## Status
+Done: everything in the original fix list, plus format-aware learnset/ability/item checks, Species/Item Clause, forms (Mega fallback learnsets), multiple named teams, Showdown/JSON import-export, undo, filtered item list, module split, accessibility pass (tab keyboard nav, labels, focus, contrast, skip link), mobile layout, saved teams page. Not done: tier/ban lists, event-move legality, Gen 1-2 stat system, doubles-specific roles, damage calcs, screen-reader and cross-browser testing.
 
 ## Fix and improve (original list; see Status for progress)
 1. Complete and verify the type chart: the Fairy attacking row and Dragon color are missing. Test all 18 attacking types and dual-type multipliers, including immunities, against an authoritative generation-specific reference.

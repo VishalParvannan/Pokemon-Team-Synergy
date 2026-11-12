@@ -10,14 +10,27 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <a class="skip-link" href="#teamTabs">Skip to team builder</a>
   <div class="wrap">
     <header>
-      <div class="lens"></div>
+      <div class="lens" aria-hidden="true"></div>
       <h1>Team Synergy<br/>Analyzer</h1>
+      <nav class="top-nav" aria-label="Pages"><a href="stats.html">Saved teams</a></nav>
     </header>
-    <p class="subtitle" id="subtitle">Build a team, configure level, nature, IVs and EVs, and analyze type synergy. Formats limit which Pokémon you can pick; moves, abilities and items are not checked.</p>
+    <p class="subtitle">Build a team, pick a format, and check it against that format's species list and learnsets before analyzing type synergy, roles and speed. Results are heuristics, not a competitive rating.</p>
 
-    <!-- Format Row -->
+    <!-- Team management -->
+    <div class="team-bar" role="group" aria-label="Saved teams">
+      <label class="selector-label" for="teamSelect">Team</label>
+      <select id="teamSelect" class="ev-input format-select"></select>
+      <button type="button" id="newTeamBtn" class="small-button">New</button>
+      <button type="button" id="dupTeamBtn" class="small-button">Duplicate</button>
+      <button type="button" id="renameTeamBtn" class="small-button">Rename</button>
+      <button type="button" id="deleteTeamBtn" class="small-button danger">Delete</button>
+      <button type="button" id="ioBtn" class="small-button">Import / Export</button>
+    </div>
+
+    <!-- Format -->
     <div class="format-row">
       <label class="selector-label" for="formatSelect">Format</label>
       <select id="formatSelect" class="ev-input format-select"></select>
@@ -27,46 +40,42 @@
       <p class="format-note" id="formatNote"></p>
     </div>
 
-    <div id="statusMessage" role="status" aria-live="polite" style="min-height:20px; margin-bottom:8px; font-size:13px; color: var(--text-muted);"></div>
+    <div id="statusMessage" class="status-message" role="status" aria-live="polite"></div>
 
-    <!-- Controls Row -->
-    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
-      <button type="button" id="randomTeamBtn" class="submit-button" style="padding: 10px 18px; border-radius: 8px;">
-        🎲 Random Team
-      </button>
-      <button type="button" id="clearTeamBtn" class="submit-button" style="padding: 10px 18px; border-radius: 8px; background: var(--panel);">
-        Clear Team
-      </button>
-      <span id="slotCounter" style="font-size: 13px; font-weight: 600; background: var(--panel); border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; color: var(--text-muted);">
-        0/6 slots filled
-      </span>
+    <div class="controls-row">
+      <button type="button" id="randomTeamBtn" class="submit-button secondary">🎲 Random Team</button>
+      <button type="button" id="clearTeamBtn" class="submit-button secondary muted">Clear Team</button>
+      <button type="button" id="undoBtn" class="submit-button secondary muted" hidden>Undo</button>
+      <span id="slotCounter" class="slot-counter">0/6 slots filled</span>
     </div>
 
-    <!-- Team Overview & Tabs Bar -->
     <div class="builder-container">
-      <div class="team-tabs" id="teamTabs">
-        <!-- Tab buttons populated dynamically -->
-      </div>
-
-      <!-- Tab Content Area -->
-      <div class="tab-content" id="tabContent">
-        <!-- Active Slot Editor or Global Overview rendered here -->
-      </div>
+      <div class="team-tabs" id="teamTabs" role="tablist" aria-label="Team slots" tabindex="-1"></div>
+      <div class="tab-content" id="tabContent" role="tabpanel"></div>
     </div>
+
+    <!-- Live rule checks -->
+    <section class="validation-panel" aria-labelledby="validationTitle">
+      <h2 id="validationTitle">Rule checks</h2>
+      <p id="validationSummary" class="sub-text" role="status" aria-live="polite"></p>
+      <ul id="validationList" class="validation-list"></ul>
+      <details>
+        <summary>What is not checked</summary>
+        <ul id="uncheckedList" class="plain-list"></ul>
+      </details>
+    </section>
 
     <div class="analyze-row">
       <button type="button" id="analyzeBtn" class="submit-button">
-        <img src="../Images/pokeball.png" alt="Pokeball" style="width: 18px; height: 18px; object-fit: contain; display: inline-block;" />
+        <img src="../Images/pokeball.png" alt="" style="width: 18px; height: 18px; object-fit: contain;" />
         Analyze Team Synergy
       </button>
     </div>
 
-    <!-- Analysis Results Section -->
-    <div class="analysis-section" id="analysisSection" hidden>
-      <h2>Team Synergy Report</h2>
+    <section class="analysis-section" id="analysisSection" hidden aria-labelledby="reportTitle">
+      <h2 id="reportTitle">Team Synergy Report</h2>
       <p class="sub-text" id="reportFormat"></p>
-      
-      <!-- Top Score Header & Progress Bars -->
+
       <div class="synergy-score-card">
         <div class="score-circle-container">
           <div class="score-circle" id="overallScoreCircle">
@@ -74,75 +83,81 @@
             <span class="score-denom">/ 100</span>
           </div>
         </div>
-        
         <div class="score-metrics">
-          <div class="grade-label" id="gradeLabel">A — Strong</div>
-          
-          <div class="metric-row">
-            <span>Offensive Coverage</span>
-            <div class="bar-track"><div class="bar-fill" id="barOffensive" style="width: 0%;"></div></div>
-            <span class="metric-val" id="valOffensive">0</span>
-          </div>
-          <div class="metric-row">
-            <span>Defensive Balance</span>
-            <div class="bar-track"><div class="bar-fill" id="barDefensive" style="width: 0%;"></div></div>
-            <span class="metric-val" id="valDefensive">0</span>
-          </div>
-          <div class="metric-row">
-            <span>Team Completeness</span>
-            <div class="bar-track"><div class="bar-fill" id="barCompleteness" style="width: 0%;"></div></div>
-            <span class="metric-val" id="valCompleteness">0</span>
-          </div>
-          <div class="metric-row">
-            <span>Moveset Completeness</span>
-            <div class="bar-track"><div class="bar-fill" id="barBuild" style="width: 0%;"></div></div>
-            <span class="metric-val" id="valBuild">0</span>
-          </div>
+          <div class="grade-label" id="gradeLabel"></div>
+          <div id="scoreMetrics"></div>
+          <details class="score-explain">
+            <summary>How this score is calculated</summary>
+            <div id="scoreExplain"></div>
+          </details>
         </div>
       </div>
 
-      <!-- Middle Grid: Coverage, Weaknesses, Resistances, Speed Tiers -->
       <div class="report-grid">
-        <div class="report-card">
-          <h3 id="coverageTitle">Offensive Coverage</h3>
-          <p class="sub-text" id="superEffectiveText">Types you hit super-effectively (0/18):</p>
+        <div class="report-card wide">
+          <h3>Offensive coverage (selected damaging moves)</h3>
+          <p class="sub-text" id="superEffectiveText"></p>
           <div class="type-pill-grid" id="coveredTypesGrid"></div>
-          <p class="sub-text" style="margin-top: 12px;">Not covered:</p>
+          <p class="sub-text" style="margin-top: 12px;">Not hit super-effectively:</p>
           <div class="type-pill-grid" id="uncoveredTypesGrid"></div>
         </div>
-
         <div class="report-card">
-          <h3>Weaknesses (by type)</h3>
+          <h3>Shared weaknesses and switch-ins</h3>
+          <ul class="stat-list" id="sharedWeakList"></ul>
+        </div>
+        <div class="report-card">
+          <h3>Weaknesses</h3>
           <ul class="stat-list" id="weaknessesList"></ul>
         </div>
-
         <div class="report-card">
-          <h3>Resistances (by type)</h3>
+          <h3>Resistances</h3>
           <ul class="stat-list" id="resistancesList"></ul>
         </div>
-
         <div class="report-card">
-          <h3>Type Immunities</h3>
+          <h3>Immunities</h3>
           <ul class="stat-list" id="immunitiesList"></ul>
         </div>
-
         <div class="report-card">
-          <h3>Speed Tiers (calculated)</h3>
+          <h3>Speed tiers (calculated)</h3>
           <ul class="stat-list" id="speedTiersList"></ul>
+        </div>
+        <div class="report-card">
+          <h3>Team roles (from moves and abilities)</h3>
+          <ul class="stat-list" id="rolesList"></ul>
         </div>
       </div>
 
-      <!-- Bottom Recommendations: What to do next -->
       <div class="next-steps-container">
         <h3>Observations</h3>
         <div class="recommendations-list" id="recommendationsList"></div>
-        <p class="sub-text" style="margin-top:12px;">The score is a simple average of four heuristics: share of types hit super-effectively by selected damaging moves, a penalty for types that hit two or more members without enough resists, how many of six slots are filled, and how many move slots are filled. It ignores abilities, items, roles, speed and format rules, so treat it as a rough checklist only.</p>
+        <h3 style="margin-top:20px;">Assumptions and limits</h3>
+        <ul class="plain-list" id="assumptionsList"></ul>
       </div>
-    </div>
+    </section>
   </div>
+
+  <dialog id="ioDialog" aria-labelledby="ioTitle">
+    <h2 id="ioTitle">Import / Export</h2>
+    <p class="sub-text">Export the current team, or paste Pokémon Showdown text or a JSON export to import it as a new team.</p>
+    <label class="selector-label" for="ioText">Team text</label>
+    <textarea id="ioText" rows="14" spellcheck="false"></textarea>
+    <p id="ioMessage" class="sub-text" role="status" aria-live="polite"></p>
+    <div class="dialog-actions">
+      <button type="button" id="exportShowdown" class="small-button">Export Showdown text</button>
+      <button type="button" id="exportJson" class="small-button">Export JSON</button>
+      <button type="button" id="copyIo" class="small-button">Copy</button>
+      <button type="button" id="importIo" class="small-button primary">Import as new team</button>
+      <button type="button" id="ioClose" class="small-button">Close</button>
+    </div>
+  </dialog>
 
   <script src="logic.js"></script>
   <script src="formats.js"></script>
+  <script src="team.js"></script>
+  <script src="analysis.js"></script>
+  <script src="api.js"></script>
+  <script src="controls.js"></script>
+  <script src="report.js"></script>
   <script src="pokemon.js"></script>
 </body>
 </html>

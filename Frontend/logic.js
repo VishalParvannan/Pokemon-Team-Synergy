@@ -139,3 +139,36 @@
     evTotal, clampEv, coveredTypes, dualTypeCoverage, defensiveSummary
   };
 });
+
+// ---- Format filtering (pure) ----
+// Scoped so these names do not clash with globals declared by other scripts.
+(function () {
+  // Which form kind a non-default Pokémon name is, or null if unrecognized.
+  function formKind(name) {
+    if (/-(mega|primal)(-|$)/.test(name)) return "mega";
+    if (/-gmax(-|$)/.test(name)) return "gmax";
+    const m = name.match(/-(alola|galar|hisui|paldea)(-|$)/);
+    return m ? m[1] : null;
+  }
+
+  // Species a Pokémon name belongs to: the longest dash-prefix that is a known species.
+  function ownerSpecies(name, allSpecies) {
+    const parts = name.split("-");
+    for (let n = parts.length; n > 0; n--) {
+      const candidate = parts.slice(0, n).join("-");
+      if (allSpecies.has(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  // entries: [{ name, id }]. IDs of 10000+ are alternate forms in PokeAPI.
+  function filterPokemon(entries, allSpecies, allowedSpecies, allowedForms) {
+    return entries.filter(({ name, id }) => {
+      if (!allowedSpecies.has(ownerSpecies(name, allSpecies))) return false;
+      return id < 10000 || allowedForms.includes(formKind(name));
+    }).map(e => e.name);
+  }
+
+  if (typeof module === "object" && module.exports) Object.assign(module.exports, { formKind, ownerSpecies, filterPokemon });
+  else Object.assign(self.PokeLogic, { formKind, ownerSpecies, filterPokemon });
+})();

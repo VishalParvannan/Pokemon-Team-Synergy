@@ -80,3 +80,18 @@ test("defensive summary separates immunities", () => {
   assert.equal(s.electric.immune, 1);
   assert.equal(s.water.weak, 1 + 1);
 });
+
+test("format filtering keeps species, forms and lookalike names separate", () => {
+  const all = new Set(["porygon", "porygon-z", "charizard", "wormadam", "tauros"]);
+  const entries = [
+    { name: "porygon", id: 137 }, { name: "porygon-z", id: 474 },
+    { name: "charizard", id: 6 }, { name: "charizard-mega-x", id: 10034 }, { name: "charizard-gmax", id: 10196 },
+    { name: "wormadam-plant", id: 413 }, { name: "wormadam-sandy", id: 10004 },
+    { name: "tauros-paldea-combat-breed", id: 10250 }
+  ];
+  const allowed = new Set(["porygon", "charizard", "wormadam", "tauros"]);
+  assert.deepEqual(L.filterPokemon(entries, all, allowed, ["mega"]),
+    ["porygon", "charizard", "charizard-mega-x", "wormadam-plant"]);
+  assert.deepEqual(L.filterPokemon(entries, all, allowed, ["paldea"]),
+    ["porygon", "charizard", "wormadam-plant", "tauros-paldea-combat-breed"]);
+});

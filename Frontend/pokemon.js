@@ -1,12 +1,14 @@
 const {
   ALL_TYPES, STAT_KEYS, NATURES, MAX_EV_TOTAL, MAX_EV_STAT, MAX_IV,
   calcAllStats, clampInt, evTotal, clampEv,
-  coveredTypes, dualTypeCoverage, defensiveSummary
+  coveredTypes, dualTypeCoverage, defensiveSummary, filterPokemon
 } = PokeLogic;
+const { FORMATS, findFormat } = PokeFormats;
 
 const API = "https://pokeapi.co/api/v2";
 const STORAGE_KEY = "pokemonTeamSynergy";
 const STORAGE_VERSION = 1;
+const FORMAT_KEY = "pokemonTeamSynergyFormat";
 
 const TYPE_COLORS = {
   normal:"#A8A878", fire:"#F08030", water:"#6890F0", electric:"#F8D030",
@@ -36,6 +38,13 @@ let itemCache = [];
 let loadError = false;
 const moveCache = new Map(); // move name -> { type, damageClass } | null (failed)
 const loadTokens = new Array(6).fill(0); // guards against stale responses overwriting newer picks
+
+// Selected format; `introducedOnly` narrows Generation formats to that generation's species
+let formatChoice = { id: "any", introducedOnly: false };
+let listToken = 0; // guards against a slow list load overwriting a newer format choice
+let pokemonEntries = null; // [{ name, id }] for every Pokémon and form, fetched once
+let generationSpecies = null; // species names per generation, fetched once
+const dexSpecies = new Map(); // pokedex name -> species names
 
 // Helper function to return a default blank slot object
 function createEmptySlot() {
@@ -152,16 +161,44 @@ async function fetchJson(url, retries = 2) {
   throw lastErr;
 }
 
-// Follow PokeAPI pagination until `next` is null
-async function fetchAllNames(firstUrl) {
-  const names = [];
-  let url = firstUrl;
+// Follow PokeAPI pagination until `next` is null; keep IDs to tell default Pokémon from alternate forms
+async function fetchPokemonEntries() {
+  const entries = [];
+  let url = `${API}/pokemon?limit=500`;
   while (url) {
     const page = await fetchJson(url);
-    names.push(...page.results.map(r => r.name));
+    page.results.forEach(r => entries.push({ name: r.name, id: parseInt(r.url.match(/(\d+)\/?$/)[1], 10) }));
     url = page.next;
   }
-  return names.sort();
+  return entries;
+}
+
+// Pokémon names available under a format (species-list filter only, not full legality)
+async function loadPokemonForFormat(choice) {
+  const format = findFormat(choice.id);
+  if (!pokemonEntries) pokemonEntries = await fetchPokemonEntries();
+  if (!format.gen && !format.dexes) return pokemonEntries.map(e => e.name).sort();
+
+  if (!generationSpecies) {
+    const gens = await Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => fetchJson(`${API}/generation/${n}`)));
+    generationSpecies = gens.map(g => g.pokemon_species.map(s => s.name));
+  }
+  const allSpecies = new Set(generationSpecies.flat());
+
+  let allowed;
+  if (format.gen) {
+    const picked = choice.introducedOnly ? [generationSpecies[format.gen - 1]] : generationSpecies.slice(0, format.gen);
+    allowed = new Set(picked.flat());
+  } else {
+    for (const dex of format.dexes) {
+      if (!dexSpecies.has(dex)) {
+        const data = await fetchJson(`${API}/pokedex/${dex}`);
+        dexSpecies.set(dex, data.pokemon_entries.map(e => e.pokemon_species.name));
+      }
+    }
+    allowed = new Set(format.dexes.flatMap(dex => dexSpecies.get(dex)));
+  }
+  return filterPokemon(pokemonEntries, allSpecies, allowed, format.forms).sort();
 }
 
 async function getMoveInfo(name) {
@@ -191,29 +228,96 @@ function applyPokemonResponse(slot, name, res) {
 // Fetch initial data and setup the UI tabs
 async function initApp() {
   loadTeam();
+  loadFormatChoice();
+  renderFormatControls();
   renderTabs();
   renderTabContent();
   await loadLists();
 }
 
 async function loadLists() {
+  const token = ++listToken;
   loadError = false;
-  setStatus("Loading Pokémon and item lists…");
+  pokemonCache = [];
+  setStatus(`Loading Pokémon for ${formatLabel()} and item lists…`);
+  renderTabContent();
   try {
     const [pokemon, holdable] = await Promise.all([
-      fetchAllNames(`${API}/pokemon?limit=500`),
-      fetchJson(`${API}/item-attribute/holdable`)
+      loadPokemonForFormat(formatChoice),
+      itemCache.length ? null : fetchJson(`${API}/item-attribute/holdable`)
     ]);
+    if (token !== listToken) return; // the format changed while this was loading
     pokemonCache = pokemon;
     // Only items that can be held in battle, not key items, TMs or bag clutter
-    itemCache = holdable.items.map(i => i.name).sort();
-    setStatus("");
+    if (holdable) itemCache = holdable.items.map(i => i.name).sort();
+    setStatus(outOfFormatWarning());
   } catch (err) {
+    if (token !== listToken) return;
     loadError = true;
     setStatus("Could not load the Pokémon database. Check your connection and retry.");
   }
   renderTabContent();
 }
+
+// ---- Format selection (saved locally) ----
+function loadFormatChoice() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FORMAT_KEY));
+    if (saved && typeof saved.id === "string") {
+      formatChoice = { id: findFormat(saved.id).id, introducedOnly: saved.introducedOnly === true };
+    }
+  } catch (err) { /* keep the default */ }
+}
+
+function saveFormatChoice() {
+  try { localStorage.setItem(FORMAT_KEY, JSON.stringify(formatChoice)); } catch (err) { /* in-memory only */ }
+}
+
+function formatLabel() {
+  const f = findFormat(formatChoice.id);
+  return f.gen && formatChoice.introducedOnly ? `${f.name} (introduced that generation only)` : f.name;
+}
+
+function outOfFormatWarning() {
+  const outside = teamSlots.filter(s => s.name && !pokemonCache.includes(s.name)).map(s => formatName(s.name));
+  return outside.length ? `Not in ${formatLabel()}: ${outside.join(", ")}. Replace them or pick another format.` : "";
+}
+
+function renderFormatControls() {
+  const select = document.getElementById("formatSelect");
+  const onlyLabel = document.getElementById("introducedOnlyLabel");
+  const onlyBox = document.getElementById("introducedOnly");
+  const format = findFormat(formatChoice.id);
+
+  select.innerHTML = "";
+  [...new Set(FORMATS.map(f => f.group))].forEach(group => {
+    const optgroup = document.createElement("optgroup");
+    optgroup.label = group;
+    FORMATS.filter(f => f.group === group).forEach(f => {
+      const opt = document.createElement("option");
+      opt.value = f.id;
+      opt.textContent = f.name;
+      opt.selected = f.id === format.id;
+      optgroup.appendChild(opt);
+    });
+    select.appendChild(optgroup);
+  });
+
+  onlyLabel.hidden = !format.gen;
+  onlyBox.checked = formatChoice.introducedOnly;
+  document.getElementById("formatNote").textContent = format.description;
+}
+
+function changeFormat(update) {
+  Object.assign(formatChoice, update);
+  saveFormatChoice();
+  renderFormatControls();
+  onTeamEdited(); // an open report was built for the old format
+  loadLists();
+}
+
+document.getElementById("formatSelect").addEventListener("change", (e) => changeFormat({ id: e.target.value }));
+document.getElementById("introducedOnly").addEventListener("change", (e) => changeFormat({ introducedOnly: e.target.checked }));
 
 // Render navigation tab buttons for overview and individual slots
 function renderTabs() {
@@ -763,6 +867,11 @@ document.getElementById("analyzeBtn").addEventListener("click", async () => {
   analyzeBtn.disabled = false;
   setStatus("");
 
+  // Species check against the selected format's list; skipped while that list is unavailable
+  const formatChecked = pokemonCache.length > 0;
+  const outsideFormat = formatChecked ? filled.filter(s => !pokemonCache.includes(s.name)).map(s => formatName(s.name)) : [];
+  document.getElementById("reportFormat").textContent = `Format: ${formatLabel()}`;
+
   const unresolvedMoves = selectedMoves.filter(m => !moveCache.get(m));
   const damagingTypes = new Set();
   filled.forEach(s => s.moves.filter(Boolean).forEach(m => {
@@ -833,6 +942,13 @@ document.getElementById("analyzeBtn").addEventListener("click", async () => {
 
   // Observations (rule-based, from the facts above)
   const recommendations = [];
+
+  if (outsideFormat.length) {
+    recommendations.push({ priority: "high", text: `Not in ${formatLabel()}: ${outsideFormat.join(", ")}.` });
+  }
+  if (!formatChecked) {
+    recommendations.push({ priority: "medium", text: "The format's Pokémon list has not loaded, so the team was not checked against it." });
+  }
 
   if (filled.length < 6) {
     recommendations.push({ priority: "high", text: `Only ${filled.length}/6 slots are filled.` });

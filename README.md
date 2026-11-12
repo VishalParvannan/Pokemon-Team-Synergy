@@ -5,9 +5,9 @@ Static browser app: build a team of six, set level, nature, IVs, EVs, ability, i
 ## Run
 Serve `Frontend/` over HTTP (assets resolve via `../Images/`), e.g. from the repo root:
 
-    python -m http.server 8000
+    python -m http.server 8080
 
-then open http://localhost:8000/Frontend/. PokeAPI and Google Fonts need network access.
+then open http://localhost:8080/Frontend/. PokeAPI and Google Fonts need network access.
 
 ## Check
     node --test tests/logic.test.js
@@ -20,3 +20,6 @@ Covers the type chart (all 18 attacking types, 4x/¼x/immunity cases), stat form
 - Defense is by type only (abilities such as Levitate are ignored).
 - The score is a documented heuristic, not a competitive rating.
 - Teams are saved in this browser's localStorage only.
+
+## Formats
+The Format picker above the builder limits which Pokémon you can choose: All Pokémon, Generation 1–9 (optionally only species introduced in that generation), or the Scarlet/Violet and Sword/Shield regional dexes. Definitions live in `Frontend/formats.js`. These are species-list filters from PokeAPI, not official VGC regulations: moves, abilities, items and restricted-legendary limits are not checked.

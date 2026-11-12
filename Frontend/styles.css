@@ -463,3 +463,11 @@ button.overview-card { font: inherit; color: inherit; }
 .search-results li.empty { cursor: default; color: var(--text-muted); background: none; }
 .search-selected { margin-top: 6px; font-size: 12px; color: var(--text-muted); display: flex; gap: 8px; align-items: center; }
 .search-clear { background: none; border: 1px solid var(--border); color: var(--text-muted); border-radius: 6px; padding: 2px 8px; font-size: 11px; cursor: pointer; }
+
+/* Format picker */
+.format-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; }
+.format-row .selector-label { margin: 0; }
+.format-select { width: auto; min-width: 240px; padding: 8px 10px; font-size: 14px; text-align: left; background: var(--panel); cursor: pointer; }
+.format-option { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-muted); }
+.format-option[hidden] { display: none; }
+.format-note { flex-basis: 100%; font-size: 12px; color: var(--text-faint); }

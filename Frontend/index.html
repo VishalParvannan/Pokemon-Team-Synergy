@@ -15,7 +15,18 @@
       <div class="lens"></div>
       <h1>Team Synergy<br/>Analyzer</h1>
     </header>
-    <p class="subtitle" id="subtitle">Build a team, configure level, nature, IVs and EVs, and analyze type synergy. Format legality is not checked.</p>
+    <p class="subtitle" id="subtitle">Build a team, configure level, nature, IVs and EVs, and analyze type synergy. Formats limit which Pokémon you can pick; moves, abilities and items are not checked.</p>
+
+    <!-- Format Row -->
+    <div class="format-row">
+      <label class="selector-label" for="formatSelect">Format</label>
+      <select id="formatSelect" class="ev-input format-select"></select>
+      <label class="format-option" id="introducedOnlyLabel" hidden>
+        <input type="checkbox" id="introducedOnly" /> Only Pokémon introduced in this generation
+      </label>
+      <p class="format-note" id="formatNote"></p>
+    </div>
+
     <div id="statusMessage" role="status" aria-live="polite" style="min-height:20px; margin-bottom:8px; font-size:13px; color: var(--text-muted);"></div>
 
     <!-- Controls Row -->
@@ -53,6 +64,7 @@
     <!-- Analysis Results Section -->
     <div class="analysis-section" id="analysisSection" hidden>
       <h2>Team Synergy Report</h2>
+      <p class="sub-text" id="reportFormat"></p>
       
       <!-- Top Score Header & Progress Bars -->
       <div class="synergy-score-card">
@@ -130,6 +142,7 @@
   </div>
 
   <script src="logic.js"></script>
+  <script src="formats.js"></script>
   <script src="pokemon.js"></script>
 </body>
 </html>

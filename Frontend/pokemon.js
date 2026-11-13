@@ -903,10 +903,12 @@ document.getElementById("analyzeBtn").addEventListener("click", async () => {
     lastValidation = validateNow(facts);
     renderValidation();
 
-    const result = PokeAnalysis.analyzeTeam(filled, PokeApi.cachedMoveInfo(), { validation: lastValidation, doubles: isDoubles() });
     setStatus("Checking matchups against the most-used Pokémon…");
     const threats = await computeThreats(filled);
     if (team !== t) return;
+    // The threat-matchup score component needs the threat results; without usage data it is left out
+    const threat = threats.result ? PokeThreats.threatScore(threats.result, threats.snapshot) : null;
+    const result = PokeAnalysis.analyzeTeam(filled, PokeApi.cachedMoveInfo(), { validation: lastValidation, doubles: isDoubles(), threat });
     if (threats.result) {
       const s = threats.result.summary;
       const top = threats.result.entries.filter(e => e.level === "high").slice(0, 3).map(e => e.name);

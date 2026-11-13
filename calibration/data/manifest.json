@@ -1,0 +1,86 @@
+{
+  "fetched": "2026-11-13",
+  "source": "pkmn/smogon (data.pkmn.cc): Smogon sample teams and usage statistics",
+  "formats": {
+    "gen9ou": {
+      "teams": 21,
+      "pool": 120,
+      "battles": 608936,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+      "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    },
+    "gen8ou": {
+      "teams": 26,
+      "pool": 120,
+      "battles": 10102,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+      "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    },
+    "gen7ou": {
+      "teams": 24,
+      "pool": 120,
+      "battles": 57773,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+      "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    },
+    "gen6ou": {
+      "teams": 31,
+      "pool": 120,
+      "battles": 22293,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+      "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    },
+    "gen5ou": {
+      "teams": 16,
+      "pool": 120,
+      "battles": 25983,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+      "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    },
+    "gen4ou": {
+      "teams": 13,
+      "pool": 120,
+      "battles": 55445,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+      "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    },
+    "gen3ou": {
+      "teams": 33,
+      "pool": 120,
+      "battles": 198165,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+      "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    },
+    "gen2ou": {
+      "teams": 19,
+      "pool": 83,
+      "battles": 6464,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+      "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    },
+    "gen1ou": {
+      "teams": 28,
+      "pool": 72,
+      "battles": 13083,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+      "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    },
+    "gen9doublesou": {
+      "teams": 8,
+      "pool": 120,
+      "battles": 183872,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+      "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    },
+    "gen9vgc2024regg": {
+      "teams": 19,
+      "pool": 0,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    },
+    "gen9vgc2025regi": {
+      "teams": 6,
+      "pool": 0,
+      "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+    }
+  }
+}

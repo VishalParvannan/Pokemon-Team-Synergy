@@ -86,6 +86,16 @@ test("best answer is the member with the strongest hit", () => {
   assert.equal(gold.bestAnswer.move, "earthquake");
 });
 
+test("threat score: fewer high threats and OHKOs score higher", () => {
+  const corv = [set("corviknight", { moves: ["brave-bird", "body-press", null, null], evs: { hp: 252, atk: 0, def: 252, spa: 0, spd: 4, spe: 0 }, nature: "impish" })];
+  const fire = TH.threatScore(TH.analyzeThreats(9, SNAPSHOT, FIRE), SNAPSHOT);
+  const bulky = TH.threatScore(TH.analyzeThreats(9, SNAPSHOT, corv), SNAPSHOT);
+  assert.equal(fire.considered, 2);
+  assert.ok(bulky.score > fire.score, `${bulky.score} vs ${fire.score}`);
+  assert.ok(fire.score >= 0 && fire.score <= 100);
+  assert.equal(TH.threatScore(null, SNAPSHOT), null);
+});
+
 test("shipped snapshots are well-formed", () => {
   const dir = path.join(__dirname, "../Frontend/data/threats");
   const files = fs.readdirSync(dir).filter(f => f.endsWith(".json"));

@@ -59,7 +59,7 @@ async function build(format) {
   return { format, file, count: out.threats.length, bytes: fs.statSync(file).size, battles: out.battles };
 }
 
-(async () => {
+if (require.main === module) (async () => {
   const formats = process.argv.slice(2).length ? process.argv.slice(2) : DEFAULT_FORMATS;
   for (const f of formats) {
     try {

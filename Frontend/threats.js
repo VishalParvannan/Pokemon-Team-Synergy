@@ -89,5 +89,24 @@
     return { entries, summary, thresholds: { SAFE_SWITCH_MAX, STRONG_HIT_MIN } };
   }
 
-  return { SAFE_SWITCH_MAX, STRONG_HIT_MIN, snapshotFor, threatSlot, analyzeThreats };
+  // Score component (0-100) from the SCORE_TOP_N most-used threats: half the share that are not
+  // high-level threats, half how rarely they OHKO your Pokémon. Calibrated in calibration/README.md.
+  const SCORE_TOP_N = 20;
+  function threatScore(result, snapshot) {
+    if (!result || !result.entries || !snapshot) return null;
+    const top = new Set(snapshot.threats.slice(0, SCORE_TOP_N).map(t => t.name));
+    const entries = result.entries.filter(e => top.has(e.name));
+    if (!entries.length || !entries[0].vs.length) return null;
+    const teamSize = entries[0].vs.length;
+    const notHigh = entries.filter(e => e.level !== "high").length / entries.length;
+    const ohkoAvoid = 1 - entries.reduce((a, e) => a + e.ohkoed.length, 0) / entries.length / teamSize;
+    return {
+      score: Math.round(100 * (0.5 * notHigh + 0.5 * ohkoAvoid)),
+      considered: entries.length,
+      notHighShare: Math.round(notHigh * 1000) / 1000,
+      ohkoAvoidance: Math.round(ohkoAvoid * 1000) / 1000
+    };
+  }
+
+  return { SAFE_SWITCH_MAX, STRONG_HIT_MIN, SCORE_TOP_N, snapshotFor, threatSlot, analyzeThreats, threatScore };
 });

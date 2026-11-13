@@ -154,21 +154,40 @@
     singles: "Checklist from selected moves and abilities: entry hazards 15, hazard removal 15, recovery 15 (8 for one user), pivoting 10, speed control or priority 15, physical and special attackers 15 (8 for one kind), setup/screens/status 15.",
     doubles: "Checklist from selected moves and abilities: speed control (Tailwind, Trick Room, Icy Wind, ...) 20, Fake Out 15, Protect on 4+ members 15 (8 for 2-3), spread moves 15, redirection or ally support 10, Intimidate 10, physical and special attackers 15 (8 for one kind)."
   };
-  function scoreComponents(doubles) {
-    return [
-      { id: "offense", label: "Offensive coverage", weight: 30, explain: "40% share of the 18 types hit super-effectively by at least one selected damaging move, 60% share of the 153 dual-type combinations hit super-effectively." },
-      { id: "defense", label: "Defensive balance", weight: 30, explain: "Starts at 100. Subtracts 7 for every extra member weak to a type beyond those that resist or are immune to it (abilities and Air Balloon included), and 4 per 4x weakness." },
-      { id: "roles", label: doubles ? "Team roles (doubles)" : "Team roles (singles)", weight: 25, explain: doubles ? ROLES_EXPLAIN.doubles : ROLES_EXPLAIN.singles },
-      { id: "completeness", label: "Set completeness", weight: 15, explain: "60% filled slots out of six, 40% how complete each set is (ability, item and four moves)." }
+  // Component weights (sum 100), calibrated per battle style against Smogon sample teams vs random
+  // teams of popular sets; see calibration/README.md (run: node calibration/run.js).
+  const CALIBRATED_WEIGHTS = {
+    singles: { offense: 25, defense: 30, roles: 0, completeness: 15, threats: 30 },
+    doubles: { offense: 5, defense: 10, roles: 5, completeness: 15, threats: 65 }
+  };
+  const CALIBRATION = {
+    singles: { testAuc: 0.633, ci95: [0.553, 0.703], before: 0.591, experts: 207, baselines: 1682 },
+    doubles: { testAuc: 0.685, ci95: [0.516, 0.839], before: 0.503, experts: 33, baselines: 312 }
+  };
+  const DEFAULT_WEIGHTS = CALIBRATED_WEIGHTS.singles;
+  // withThreats: include the threat-matchup component (only when usage data and the calculator ran;
+  // otherwise the remaining weights are renormalized)
+  function scoreComponents(doubles, weights, withThreats) {
+    const w = { ...CALIBRATED_WEIGHTS[doubles ? "doubles" : "singles"], ...(weights || {}) };
+    const list = [
+      { id: "offense", label: "Offensive coverage", weight: w.offense, explain: "40% share of the 18 types hit super-effectively by at least one selected damaging move, 60% share of the 153 dual-type combinations hit super-effectively." },
+      { id: "defense", label: "Defensive balance", weight: w.defense, explain: "Starts at 100. Subtracts 7 for every extra member weak to a type beyond those that resist or are immune to it (abilities and Air Balloon included), and 4 per 4x weakness." },
+      { id: "roles", label: doubles ? "Team roles (doubles)" : "Team roles (singles)", weight: w.roles, explain: (doubles ? ROLES_EXPLAIN.doubles : ROLES_EXPLAIN.singles) + (w.roles === 0 ? " Shown for information only: in calibration it did not separate expert teams from random ones, so it carries no weight." : "") },
+      { id: "completeness", label: "Set completeness", weight: w.completeness, explain: "60% filled slots out of six, 40% how complete each set is (ability, item and four moves)." }
     ];
+    if (withThreats && w.threats > 0) {
+      list.push({ id: "threats", label: "Threat matchups", weight: w.threats, explain: "Against the 20 most-used Pokémon of the format with their most common sets (damage calculations): half the share that are not high-level threats, half how rarely they OHKO your Pokémon." });
+    }
+    return list;
   }
   const SCORE_COMPONENTS = scoreComponents(false);
 
   function scoreTeam(members, ctx) {
     const { cov, summary, roles, doubles } = ctx;
-    const COMPONENTS = scoreComponents(!!doubles);
+    const threat = ctx.threat && typeof ctx.threat.score === "number" ? ctx.threat : null;
+    const COMPONENTS = scoreComponents(!!doubles, ctx.weights, !!threat);
     if (!members.length) {
-      return { overall: 0, components: COMPONENTS.map(c => ({ ...c, score: 0, details: [] })) };
+      return { overall: 0, components: COMPONENTS.map(c => ({ ...c, score: 0, details: [] })), calibration: CALIBRATION[doubles ? "doubles" : "singles"], threatsIncluded: !!threat };
     }
     // Offense
     const offense = Math.round(100 * (0.4 * cov.covered.length / 18 + 0.6 * cov.dual.hit / cov.dual.total));
@@ -212,11 +231,18 @@
     const completeness = Math.round(100 * (0.6 * members.length / 6 + 0.4 * setFill));
     const completeDetails = [`${members.length}/6 slots filled; sets are ${Math.round(setFill * 100)}% complete on average.`];
 
-    const scores = { offense, defense, roles: roleScore, completeness };
-    const details = { offense: offenseDetails, defense: defenseDetails, roles: roleDetails, completeness: completeDetails };
-    const components = COMPONENTS.map(c => ({ ...c, score: scores[c.id], details: details[c.id] }));
-    const overall = Math.round(components.reduce((a, c) => a + c.score * c.weight, 0) / 100);
-    return { overall, components };
+    const scores = { offense, defense, roles: roleScore, completeness, threats: threat ? threat.score : 0 };
+    const details = { offense: offenseDetails, defense: defenseDetails, roles: roleDetails, completeness: completeDetails,
+      threats: threat ? [`${Math.round(threat.notHighShare * threat.considered)}/${threat.considered} top threats are not high-level threats; on average they OHKO ${Math.round((1 - threat.ohkoAvoidance) * 100)}% of your team.`] : [] };
+    // Weights are renormalized over the components present (threats are absent without usage data)
+    const totalWeight = COMPONENTS.reduce((a, c) => a + c.weight, 0) || 1;
+    // Displayed weights: percentages that sum to exactly 100 (largest-remainder rounding)
+    const raw = COMPONENTS.map(c => (c.weight / totalWeight) * 100);
+    const shown = raw.map(Math.floor);
+    raw.map((x, i) => [x - shown[i], i]).sort((a, b) => b[0] - a[0]).slice(0, 100 - shown.reduce((a, b) => a + b, 0)).forEach(([, i]) => { shown[i]++; });
+    const components = COMPONENTS.map((c, i) => ({ ...c, weight: shown[i], score: scores[c.id], details: details[c.id] }));
+    const overall = Math.round(COMPONENTS.reduce((a, c) => a + scores[c.id] * c.weight, 0) / totalWeight);
+    return { overall, components, calibration: CALIBRATION[doubles ? "doubles" : "singles"], threatsIncluded: !!threat };
   }
 
   // ---- Observations: each states the evidence it rests on ----
@@ -287,7 +313,7 @@
         ? "Roles are detected from move and ability names for doubles play (speed control, Fake Out, Protect, spread moves, redirection). VGC-specific rules (level 50, bring six pick four, restricted Pokémon) are not applied."
         : "Roles are detected from move and ability names and assume singles play. Switch to Doubles to evaluate doubles roles.",
       "Speed uses each set's own level, nature, IVs and EVs, with Choice Scarf. Stat stages, weather and paralysis are ignored.",
-      "The score is a weighted checklist whose weights are judgement calls, tested only for sensible ordering on example teams. It is not a competitive rating."
+      `The score's weights were calibrated so that Smogon sample teams outscore random teams of popular sets. On held-out teams an expert team outscores a random one ${Math.round(CALIBRATION[doubles ? "doubles" : "singles"].testAuc * 100)}% of the time (50% would be chance). It is a modest signal, not a competitive rating.`
     ];
   }
   const ASSUMPTIONS = assumptions(false);
@@ -300,7 +326,7 @@
     const cov = coverage(members, moveInfo);
     const shared = sharedWeaknesses(summary);
     const doubles = !!(opts && opts.doubles);
-    const score = scoreTeam(members, { cov, summary, roles, doubles });
+    const score = scoreTeam(members, { cov, summary, roles, doubles, weights: opts && opts.weights, threat: opts && opts.threat });
     return {
       summary, weaknesses: list("weak"), resistances: list("resist"), immunities: list("immune"),
       shared, roles, roleKeys: doubles ? ROLE_KEYS.doubles : ROLE_KEYS.singles, cov, speed: speedTiers(members), score, doubles,
@@ -310,7 +336,7 @@
   }
 
   return {
-    ABILITY_DEFENSE, ROLE_LABELS, ROLE_KEYS, SCORE_COMPONENTS, ASSUMPTIONS, scoreComponents,
+    ABILITY_DEFENSE, ROLE_LABELS, ROLE_KEYS, SCORE_COMPONENTS, ASSUMPTIONS, DEFAULT_WEIGHTS, CALIBRATED_WEIGHTS, CALIBRATION, scoreComponents,
     defensiveMultiplier, defensiveSummary, sharedWeaknesses, memberRoles, teamRoles, speedTiers,
     coverage, scoreTeam, observations, analyzeTeam
   };

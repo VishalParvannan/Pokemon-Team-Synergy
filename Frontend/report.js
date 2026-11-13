@@ -27,14 +27,16 @@ const Report = (function () {
     const { overall, components } = result.score;
     setText("overallScoreNum", overall);
     document.getElementById("overallScoreCircle").className = `score-circle ${scoreColor(overall)}`;
-    setText("gradeLabel", "Checklist score (not a competitive rating)");
+    setText("gradeLabel", "Calibrated team score (a rough signal, not a competitive rating)");
     set("scoreMetrics", components.map(c => `
       <div class="metric-row">
         <span>${esc(c.label)} <small>(${c.weight}%)</small></span>
         <div class="bar-track" role="img" aria-label="${esc(c.label)}: ${c.score} out of 100"><div class="bar-fill ${scoreColor(c.score)}" style="width:${c.score}%"></div></div>
         <span class="metric-val">${c.score}</span>
       </div>`).join(""));
-    set("scoreExplain", components.map(c => `
+    const cal = result.score.calibration;
+    const calibrationNote = cal ? `<p><strong>How well it works:</strong> the weights were calibrated on ${cal.experts} Smogon sample teams against ${cal.baselines.toLocaleString()} random teams built from the same formats' most common sets. On held-out teams, an expert team outscores a random one ${Math.round(cal.testAuc * 100)}% of the time (95% interval ${Math.round(cal.ci95[0] * 100)}–${Math.round(cal.ci95[1] * 100)}%; 50% would be chance, ${Math.round(cal.before * 100)}% before calibration). Treat it as a rough signal.${result.score.threatsIncluded ? "" : " Threat matchups are not part of this score (no usage data for this format), so the other weights were scaled up."}</p>` : "";
+    set("scoreExplain", calibrationNote + components.map(c => `
       <h4>${esc(c.label)} — ${c.score}/100 (weight ${c.weight}%)</h4>
       <p>${esc(c.explain)}</p>
       <ul>${c.details.map(d => `<li>${esc(d)}</li>`).join("")}</ul>`).join(""));

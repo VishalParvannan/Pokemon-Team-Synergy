@@ -1,0 +1,447 @@
+{
+  "generated": "2026-11-13",
+  "data": {
+    "fetched": "2026-11-13",
+    "source": "pkmn/smogon (data.pkmn.cc): Smogon sample teams and usage statistics",
+    "formats": {
+      "gen9ou": {
+        "teams": 21,
+        "pool": 120,
+        "battles": 608936,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+        "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      },
+      "gen8ou": {
+        "teams": 26,
+        "pool": 120,
+        "battles": 10102,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+        "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      },
+      "gen7ou": {
+        "teams": 24,
+        "pool": 120,
+        "battles": 57773,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+        "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      },
+      "gen6ou": {
+        "teams": 31,
+        "pool": 120,
+        "battles": 22293,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+        "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      },
+      "gen5ou": {
+        "teams": 16,
+        "pool": 120,
+        "battles": 25983,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+        "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      },
+      "gen4ou": {
+        "teams": 13,
+        "pool": 120,
+        "battles": 55445,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+        "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      },
+      "gen3ou": {
+        "teams": 33,
+        "pool": 120,
+        "battles": 198165,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+        "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      },
+      "gen2ou": {
+        "teams": 19,
+        "pool": 83,
+        "battles": 6464,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+        "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      },
+      "gen1ou": {
+        "teams": 28,
+        "pool": 72,
+        "battles": 13083,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+        "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      },
+      "gen9doublesou": {
+        "teams": 8,
+        "pool": 120,
+        "battles": 183872,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT",
+        "statsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      },
+      "gen9vgc2024regg": {
+        "teams": 19,
+        "pool": 0,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      },
+      "gen9vgc2025regi": {
+        "teams": 6,
+        "pool": 0,
+        "teamsLastModified": "Thu, 12 Nov 2026 07:16:26 GMT"
+      }
+    }
+  },
+  "method": {
+    "experts": "Smogon sample teams (pkmn/smogon)",
+    "baseline": "random teams of 6 distinct species drawn by usage from each format's 120 most-used Pokémon, each with its most common set (8 per expert team, min 80 per format)",
+    "split": "70/30 train/test per format, seed 20261113",
+    "metric": "AUC = probability an expert team outscores a baseline team; 95% CI by bootstrap (1000 resamples)",
+    "tuning": "grid over offense/defense/roles/threat-matchup weights in steps of 5 with completeness fixed at 15 (complete teams cannot calibrate it); then among weights within 0.01 of the best training AUC the most evenly spread is chosen (rule fixed before viewing test results)",
+    "threats": "threat-matchup component uses the 20 most-used Pokémon of the format (Gen 9 Doubles OU for doubles) with their most common sets"
+  },
+  "groups": {
+    "singles": {
+      "expertTeams": 207,
+      "baselineTeams": 1682,
+      "skippedExpertTeams": 4,
+      "perComponent": {
+        "offense": {
+          "auc": 0.537,
+          "meanExpert": 90.9,
+          "meanBaseline": 90.1
+        },
+        "defense": {
+          "auc": 0.662,
+          "meanExpert": 59.2,
+          "meanBaseline": 47.5
+        },
+        "roles": {
+          "auc": 0.497,
+          "meanExpert": 76.3,
+          "meanBaseline": 76.4
+        },
+        "completeness": {
+          "auc": 0.493,
+          "meanExpert": 97.6,
+          "meanBaseline": 97.6
+        },
+        "threats": {
+          "auc": 0.576,
+          "meanExpert": 87.2,
+          "meanBaseline": 84.5
+        }
+      },
+      "originalWeights": {
+        "offense": 30,
+        "defense": 30,
+        "roles": 25,
+        "completeness": 15,
+        "threats": 0
+      },
+      "bestFitWeights": {
+        "offense": 0,
+        "defense": 35,
+        "roles": 0,
+        "completeness": 15,
+        "threats": 50
+      },
+      "chosenWeights": {
+        "offense": 25,
+        "defense": 30,
+        "roles": 0,
+        "completeness": 15,
+        "threats": 30
+      },
+      "original": {
+        "all": {
+          "auc": 0.611,
+          "ci95": [
+            0.569,
+            0.653
+          ],
+          "meanExpert": 78.7,
+          "meanBaseline": 75,
+          "experts": 207,
+          "baselines": 1682
+        },
+        "train": {
+          "auc": 0.62,
+          "ci95": [
+            0.57,
+            0.667
+          ],
+          "meanExpert": 79.1,
+          "meanBaseline": 75.1,
+          "experts": 145,
+          "baselines": 1178
+        },
+        "test": {
+          "auc": 0.591,
+          "ci95": [
+            0.509,
+            0.673
+          ],
+          "meanExpert": 77.9,
+          "meanBaseline": 74.9,
+          "experts": 62,
+          "baselines": 504
+        }
+      },
+      "bestFit": {
+        "train": {
+          "auc": 0.695,
+          "ci95": [
+            0.648,
+            0.735
+          ],
+          "meanExpert": 79.5,
+          "meanBaseline": 73.6,
+          "experts": 145,
+          "baselines": 1178
+        },
+        "test": {
+          "auc": 0.631,
+          "ci95": [
+            0.56,
+            0.704
+          ],
+          "meanExpert": 77.6,
+          "meanBaseline": 73.4,
+          "experts": 62,
+          "baselines": 504
+        }
+      },
+      "chosen": {
+        "train": {
+          "auc": 0.685,
+          "ci95": [
+            0.639,
+            0.728
+          ],
+          "meanExpert": 81.7,
+          "meanBaseline": 76.8,
+          "experts": 145,
+          "baselines": 1178
+        },
+        "test": {
+          "auc": 0.633,
+          "ci95": [
+            0.553,
+            0.703
+          ],
+          "meanExpert": 80.3,
+          "meanBaseline": 76.7,
+          "experts": 62,
+          "baselines": 504
+        }
+      },
+      "perFormat": {
+        "gen9ou": {
+          "original": 0.65,
+          "bestFit": 0.812,
+          "chosen": 0.797,
+          "experts": 21
+        },
+        "gen8ou": {
+          "original": 0.66,
+          "bestFit": 0.689,
+          "chosen": 0.725,
+          "experts": 22
+        },
+        "gen7ou": {
+          "original": 0.654,
+          "bestFit": 0.694,
+          "chosen": 0.72,
+          "experts": 24
+        },
+        "gen6ou": {
+          "original": 0.823,
+          "bestFit": 0.722,
+          "chosen": 0.761,
+          "experts": 31
+        },
+        "gen5ou": {
+          "original": 0.692,
+          "bestFit": 0.661,
+          "chosen": 0.684,
+          "experts": 16
+        },
+        "gen4ou": {
+          "original": 0.597,
+          "bestFit": 0.803,
+          "chosen": 0.783,
+          "experts": 13
+        },
+        "gen3ou": {
+          "original": 0.609,
+          "bestFit": 0.733,
+          "chosen": 0.707,
+          "experts": 33
+        },
+        "gen2ou": {
+          "original": 0.659,
+          "bestFit": 0.526,
+          "chosen": 0.55,
+          "experts": 19
+        },
+        "gen1ou": {
+          "original": 0.607,
+          "bestFit": 0.636,
+          "chosen": 0.621,
+          "experts": 28
+        }
+      }
+    },
+    "doubles": {
+      "expertTeams": 33,
+      "baselineTeams": 312,
+      "skippedExpertTeams": 0,
+      "perComponent": {
+        "offense": {
+          "auc": 0.442,
+          "meanExpert": 89.3,
+          "meanBaseline": 90.7
+        },
+        "defense": {
+          "auc": 0.6,
+          "meanExpert": 45.6,
+          "meanBaseline": 38.7
+        },
+        "roles": {
+          "auc": 0.525,
+          "meanExpert": 79.7,
+          "meanBaseline": 78.7
+        },
+        "completeness": {
+          "auc": 0.455,
+          "meanExpert": 99.7,
+          "meanBaseline": 100
+        },
+        "threats": {
+          "auc": 0.77,
+          "meanExpert": 92.5,
+          "meanBaseline": 86.1
+        }
+      },
+      "originalWeights": {
+        "offense": 30,
+        "defense": 30,
+        "roles": 25,
+        "completeness": 15,
+        "threats": 0
+      },
+      "bestFitWeights": {
+        "offense": 0,
+        "defense": 5,
+        "roles": 5,
+        "completeness": 15,
+        "threats": 75
+      },
+      "chosenWeights": {
+        "offense": 5,
+        "defense": 10,
+        "roles": 5,
+        "completeness": 15,
+        "threats": 65
+      },
+      "original": {
+        "all": {
+          "auc": 0.552,
+          "ci95": [
+            0.447,
+            0.658
+          ],
+          "meanExpert": 75.4,
+          "meanBaseline": 73.5,
+          "experts": 33,
+          "baselines": 312
+        },
+        "train": {
+          "auc": 0.574,
+          "ci95": [
+            0.463,
+            0.69
+          ],
+          "meanExpert": 75.7,
+          "meanBaseline": 73.1,
+          "experts": 23,
+          "baselines": 218
+        },
+        "test": {
+          "auc": 0.503,
+          "ci95": [
+            0.306,
+            0.699
+          ],
+          "meanExpert": 74.6,
+          "meanBaseline": 74.5,
+          "experts": 10,
+          "baselines": 94
+        }
+      },
+      "bestFit": {
+        "train": {
+          "auc": 0.791,
+          "ci95": [
+            0.696,
+            0.879
+          ],
+          "meanExpert": 90.8,
+          "meanBaseline": 85.3,
+          "experts": 23,
+          "baselines": 218
+        },
+        "test": {
+          "auc": 0.734,
+          "ci95": [
+            0.591,
+            0.869
+          ],
+          "meanExpert": 90.2,
+          "meanBaseline": 85.8,
+          "experts": 10,
+          "baselines": 94
+        }
+      },
+      "chosen": {
+        "train": {
+          "auc": 0.783,
+          "ci95": [
+            0.68,
+            0.872
+          ],
+          "meanExpert": 88.3,
+          "meanBaseline": 83.1,
+          "experts": 23,
+          "baselines": 218
+        },
+        "test": {
+          "auc": 0.685,
+          "ci95": [
+            0.516,
+            0.839
+          ],
+          "meanExpert": 87.6,
+          "meanBaseline": 83.8,
+          "experts": 10,
+          "baselines": 94
+        }
+      },
+      "perFormat": {
+        "gen9doublesou": {
+          "original": 0.702,
+          "bestFit": 0.916,
+          "chosen": 0.898,
+          "experts": 8
+        },
+        "gen9vgc2024regg": {
+          "original": 0.538,
+          "bestFit": 0.72,
+          "chosen": 0.714,
+          "experts": 19
+        },
+        "gen9vgc2025regi": {
+          "original": 0.498,
+          "bestFit": 0.713,
+          "chosen": 0.676,
+          "experts": 6
+        }
+      }
+    }
+  }
+}

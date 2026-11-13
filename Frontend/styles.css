@@ -551,6 +551,10 @@ details summary { cursor: pointer; font-size: 12px; color: var(--text-muted); }
 .rec-evidence { font-size: 11px; color: var(--text-muted); }
 .type-pill.uncovered { color: #c0c6dc; }
 
+.site-footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 12px; color: var(--text-muted); }
+.site-footer a { color: var(--text-muted); }
+.site-footer .link-button { color: var(--text-muted); margin: 0; }
+
 /* Import/export dialog */
 dialog { background: var(--panel); color: var(--text-main); border: 1px solid var(--panel-border); border-radius: 12px; padding: 20px; width: min(640px, calc(100vw - 32px)); }
 dialog::backdrop { background: rgba(0, 0, 0, 0.6); }

@@ -135,10 +135,10 @@ function recomputePool(slot) {
 // Reload species data (learnsets are not saved) for every filled slot
 function hydrateTeam() {
   const t = team;
-  slots().forEach((slot, i) => {
-    if (!slot.name || slot.learn || slot.dataState === "loading") return;
+  return Promise.allSettled(slots().map((slot, i) => {
+    if (!slot.name || slot.learn || slot.dataState === "loading") return null;
     slot.dataState = "loading";
-    PokeApi.getPokemon(slot.name).then(parsed => {
+    return PokeApi.getPokemon(slot.name).then(parsed => {
       if (team !== t || t.slots[i] !== slot) return;
       applyParsed(slot, parsed);
     }).catch(() => {
@@ -149,16 +149,26 @@ function hydrateTeam() {
       renderTabContent();
       scheduleValidation();
     });
-  });
+  }));
 }
 
 // ---- Lists (Pokémon by format, battle items) ----
+// Startup timings (ms since navigation) and network counters, readable as window.appPerf
+const appPerf = { listsReadyMs: null, teamReadyMs: null, readyMs: null, network: PokeApi.stats };
+window.appPerf = appPerf;
+const sinceStart = () => Math.round(performance.now());
+
 async function initApp() {
   store = loadStore();
   setActiveTeam(store.activeTeamId);
+  const hydrated = hydrateTeam(); // marks slots as loading before the first render
   renderAll();
-  hydrateTeam();
-  await loadLists();
+  await Promise.all([
+    hydrated.then(() => { appPerf.teamReadyMs = sinceStart(); }),
+    loadLists().then(() => { appPerf.listsReadyMs = sinceStart(); })
+  ]);
+  appPerf.readyMs = sinceStart();
+  performance.mark("app-ready");
 }
 
 async function loadLists() {
@@ -456,7 +466,7 @@ function renderPokemonEditor(container, slotIdx) {
     movesContainer.innerHTML = `<span class="selector-label">Moveset</span>`;
     const stateNote = document.createElement("p");
     stateNote.className = "field-hint";
-    if (slot.dataState === "loading") stateNote.textContent = "Loading this Pokémon's move data…";
+    if (slot.dataState === "loading" || (!slot.learn && slot.dataState !== "failed")) stateNote.textContent = "Loading this Pokémon's move data…";
     else if (slot.dataState === "failed") stateNote.textContent = "Move data could not be loaded. Check your connection, then reselect the Pokémon.";
     else if (era !== null) stateNote.textContent = `Moves are limited to what ${formatName(slot.name)} can learn in ${currentFormat().name} games (${slot.movePool.length} moves).`;
     movesContainer.appendChild(stateNote);
@@ -863,6 +873,11 @@ document.getElementById("analyzeBtn").addEventListener("click", async () => {
   } finally {
     analyzeBtn.disabled = false;
   }
+});
+
+document.getElementById("clearCacheBtn").addEventListener("click", async () => {
+  await PokeApi.clearCache();
+  setStatus("Cached PokeAPI data cleared. It will be downloaded again as needed. Your teams are not affected.");
 });
 
 initApp();

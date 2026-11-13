@@ -9,7 +9,8 @@ Build a trustworthy, approachable Pokémon team builder that helps players under
 - `Frontend/formats.js`: format definitions (species, forms, era, learnset version groups, clauses).
 - `Frontend/team.js`: slot/team model, versioned multi-team store + v1 migration, rule validation, Showdown/JSON import-export (pure).
 - `Frontend/analysis.js`: ability/item-aware defense, coverage, roles, speed, checklist score, observations (pure).
-- `Frontend/api.js`: PokeAPI fetch with retry, caches, response parsers.
+- `Frontend/api.js`: PokeAPI fetch with retry, response parsers; results go through `Frontend/cache.js` (IndexedDB, 7-day TTL, bump `DATA_VERSION` when a parser's output changes). `?cache=off` bypasses all caching for benchmarks; `window.appPerf` holds startup timings.
+- `bench/`: benchmark fixture and results for the cache.
 - `Frontend/controls.js`, `report.js`: DOM widgets and report rendering.
 - `Frontend/stats.html` + `stats.js`: saved teams page.
 - `tests/*.test.js`: `node --test tests/*.test.js`. `.claude/launch.json` serves the repo on port 8090.

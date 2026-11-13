@@ -28,6 +28,12 @@ test("sanitizeSlot zeroes EVs that exceed the 510 cap", () => {
   assert.equal(Object.values(s.evs).reduce((a, b) => a + b, 0), 0);
 });
 
+test("slots restored from storage have an empty move pool until data loads (editor must not crash)", () => {
+  const s = T.sanitizeSlot({ name: "garchomp", moves: ["earthquake"] });
+  assert.deepEqual(s.movePool, []);
+  assert.equal(T.serializeSlot(T.createEmptySlot()).movePool, undefined);
+});
+
 test("serializeSlot drops runtime-only fields", () => {
   const s = mon("pikachu", { learn: { tackle: ["x-y"] } });
   const out = T.serializeSlot(s);

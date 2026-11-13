@@ -22,8 +22,9 @@
       level: 100, nature: "hardy", moves: [null, null, null, null],
       stats: { hp: 80, atk: 80, def: 80, spa: 80, spd: 80, spe: 80 }, // base stats
       ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
-      evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 }
-      // Runtime-only (never saved): learn {move: [versionGroup]}, movePool [move], dataState
+      evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
+      // Runtime-only (never saved): movePool [move] for the current format; also learn {move: [versionGroup]}, dataState
+      movePool: []
     };
   }
 
@@ -53,7 +54,7 @@
   }
 
   function serializeSlot(slot) {
-    if (!slot.name) return createEmptySlot();
+    if (!slot.name) { const { movePool, ...empty } = createEmptySlot(); return empty; }
     const { learn, movePool, dataState, ...persisted } = slot;
     return JSON.parse(JSON.stringify(persisted));
   }

@@ -12,7 +12,7 @@ then open http://localhost:8080/Frontend/ (builder) or http://localhost:8080/Fro
 ## Check
     node --test tests/*.test.js
 
-Covers the type chart, stat formula, EV limits, format filtering, team storage and v1 migration, Showdown/JSON import and export, rule validation, ability-aware defense, role detection, speed tiers and score ordering on example teams. The UI is checked by hand (see below), not automatically.
+Covers the persistent cache (expiry, versioning, failures), the type chart, stat formula, EV limits, format filtering, team storage and v1 migration, Showdown/JSON import and export, rule validation, ability-aware defense, role detection, speed tiers and score ordering on example teams. The UI is checked by hand (see below), not automatically.
 
 ## Features
 - Multiple named teams (new, duplicate, rename, delete) saved in this browser's localStorage. Data from the old single-team version is migrated, and its keys are left in place.
@@ -20,6 +20,10 @@ Covers the type chart, stat formula, EV limits, format filtering, team storage a
 - Undo for clearing, random teams, removing a Pokémon and deleting a team.
 - Live rule checks, with a list of what is *not* checked.
 - Saved teams page (`stats.html`).
+- Persistent cache: processed PokeAPI data is kept in IndexedDB for 7 days, so repeat visits make no API requests ("Clear cached data" in the footer resets it).
+
+## Performance
+Repeat visits: **0 PokeAPI requests instead of 34**, **no JSON to parse instead of 1.7 MB**, and the page is **ready 47% sooner** (206 → 110 ms median of 5 runs). First visits are unchanged. Method, raw numbers and caveats: [bench/README.md](bench/README.md).
 
 ## Rules and limitations
 - **Formats** (`Frontend/formats.js`): All Pokémon, Generation 1–9, and the Scarlet/Violet and Sword/Shield regional dexes. Each format sets allowed species and forms, the game generation whose rules apply, and the games whose learnsets define legal moves.

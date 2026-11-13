@@ -20,6 +20,7 @@ Build a trustworthy, approachable Pokémon team builder that helps players under
 - Teams have `format.doubles` (battle style): changes roles, roles score, threats and spread damage. Share links encode the team in the URL fragment (`team.js` encodeShare/decodeShare).
 - `Frontend/controls.js`, `report.js`: DOM widgets and report rendering.
 - `Frontend/stats.html` + `stats.js`: saved teams page.
+- `index.html`/`stats.html` load local CSS/JS with a `?v=YYYYMMDD` tag so browsers don't reuse stale copies; bump it in both files whenever a CSS or JS file changes.
 - `tests/*.test.js`: `node --test tests/*.test.js`. `.claude/launch.json` serves the repo on port 8090.
 
 ## Status

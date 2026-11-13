@@ -28,12 +28,18 @@
       <button type="button" id="renameTeamBtn" class="small-button">Rename</button>
       <button type="button" id="deleteTeamBtn" class="small-button danger">Delete</button>
       <button type="button" id="ioBtn" class="small-button">Import / Export</button>
+      <button type="button" id="shareBtn" class="small-button">Copy share link</button>
     </div>
 
     <!-- Format -->
     <div class="format-row">
       <label class="selector-label" for="formatSelect">Format</label>
       <select id="formatSelect" class="ev-input format-select"></select>
+      <label class="selector-label" for="battleStyle">Battle style</label>
+      <select id="battleStyle" class="ev-input format-select narrow">
+        <option value="singles">Singles</option>
+        <option value="doubles">Doubles</option>
+      </select>
       <label class="format-option" id="introducedOnlyLabel" hidden>
         <input type="checkbox" id="introducedOnly" /> Only Pokémon introduced in this generation
       </label>
@@ -63,6 +69,14 @@
         <summary>What is not checked</summary>
         <ul id="uncheckedList" class="plain-list"></ul>
       </details>
+    </section>
+
+    <!-- Damage calculator -->
+    <section class="damage-panel" aria-labelledby="damageTitle">
+      <h2 id="damageTitle">Damage calculator</h2>
+      <p class="sub-text">Uses your sets' level, nature, EVs, IVs, ability and item, with the format's generation mechanics. Powered by <a href="https://github.com/smogon/damage-calc" rel="noopener">@smogon/calc</a>, the engine behind Pokémon Showdown's calculator.</p>
+      <div id="damageControls" class="damage-controls"></div>
+      <div id="damageResult" class="damage-result" role="status" aria-live="polite"></div>
     </section>
 
     <div class="analyze-row">
@@ -122,9 +136,15 @@
           <ul class="stat-list" id="speedTiersList"></ul>
         </div>
         <div class="report-card">
-          <h3>Team roles (from moves and abilities)</h3>
+          <h3 id="rolesTitle">Team roles (from moves and abilities)</h3>
           <ul class="stat-list" id="rolesList"></ul>
         </div>
+      </div>
+
+      <div class="report-card threats-card">
+        <h3 id="threatsTitle">Threats from usage statistics</h3>
+        <p class="sub-text" id="threatsIntro"></p>
+        <div id="threatsList"></div>
       </div>
 
       <div class="next-steps-container">
@@ -162,7 +182,12 @@
   <script src="analysis.js"></script>
   <script src="cache.js"></script>
   <script src="api.js"></script>
+  <script src="vendor/smogon-calc/data.min.js"></script>
+  <script src="vendor/smogon-calc/calc.min.js"></script>
+  <script src="damage.js"></script>
+  <script src="threats.js"></script>
   <script src="controls.js"></script>
+  <script src="damage-panel.js"></script>
   <script src="report.js"></script>
   <script src="pokemon.js"></script>
 </body>

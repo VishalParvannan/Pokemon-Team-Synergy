@@ -158,6 +158,51 @@ test("JSON export/import round-trips and rejects bad input", () => {
   assert.ok(T.parseJson(JSON.stringify({ app: "pokemon-team-synergy", version: 99, team: {} })).error);
 });
 
+test("share links round-trip a full team and stay short", async () => {
+  const team = T.createTeam("Rain team", { id: "gen9", introducedOnly: false });
+  ["pelipper", "barraskewda", "kingdra", "ferrothorn", "toxapex", "zapdos"].forEach((n, i) => {
+    team.slots[i] = mon(n, { item: "leftovers", ability: "drizzle", nature: "bold", level: 50 + i, moves: ["hurricane", "scald", "u-turn", "roost"], evs: { hp: 252, atk: 0, def: 252, spa: 0, spd: 4, spe: 0 } });
+  });
+  const code = await T.encodeShare(team);
+  assert.equal(code[0], "z"); // compressed in Node 18+ / modern browsers
+  assert.ok(code.length < 700, `code length ${code.length}`);
+  assert.match(code, /^[A-Za-z0-9_-]+$/); // URL-safe
+  const back = await T.decodeShare(code, id => !!F.findFormat(id));
+  assert.equal(back.name, "Rain team");
+  assert.equal(back.format.id, "gen9");
+  assert.equal(back.slots[3].name, "ferrothorn");
+  assert.equal(back.slots[5].level, 55);
+  assert.deepEqual(back.slots[0].moves, ["hurricane", "scald", "u-turn", "roost"]);
+  assert.equal(back.slots[0].evs.def, 252);
+});
+
+test("battle style (doubles) is kept through storage, JSON export and share links", async () => {
+  const team = T.createTeam("VGC", { id: "gen9", doubles: true });
+  team.slots[0] = mon("incineroar");
+  assert.equal(team.format.doubles, true);
+  assert.equal(T.parseJson(T.exportJson(team)).team.format.doubles, true);
+  assert.equal((await T.decodeShare(await T.encodeShare(team))).format.doubles, true);
+  const store = T.sanitizeStore(T.serializeStore({ version: 2, activeTeamId: team.id, teams: [team] }));
+  assert.equal(store.teams[0].format.doubles, true);
+  assert.equal(T.createTeam("x").format.doubles, false);
+});
+
+test("share links: empty slots, plain fallback and bad input", async () => {
+  const team = T.createTeam("One");
+  team.slots[2] = mon("pikachu");
+  const back = await T.decodeShare(await T.encodeShare(team));
+  assert.equal(back.slots[0].name, null);
+  assert.equal(back.slots[2].name, "pikachu");
+  const plain = "j" + Buffer.from(JSON.stringify(T.toShareable(team))).toString("base64url");
+  assert.equal((await T.decodeShare(plain)).slots[2].name, "pikachu");
+  assert.equal(await T.decodeShare("zgarbage!!"), null);
+  assert.equal(await T.decodeShare("xabc"), null);
+  assert.equal(await T.decodeShare(""), null);
+  const evil = "j" + Buffer.from(JSON.stringify({ v: 1, n: "<img src=x>", s: [{ name: "<script>" }] })).toString("base64url");
+  const t = await T.decodeShare(evil);
+  assert.equal(t.slots[0].name, null); // invalid names are dropped by the same sanitizer as imports
+});
+
 test("validateTeam: EV cap, duplicate moves, unlearnable moves", () => {
   const slots = Array.from({ length: 6 }, T.createEmptySlot);
   slots[0] = mon("a", { evs: { hp: 252, atk: 252, def: 252, spa: 0, spd: 0, spe: 0 }, moves: ["tackle", "tackle", "flamethrower", null] });
@@ -238,7 +283,7 @@ test("api parsers: learnsets, pools by version group, move and generation info",
   assert.deepEqual(A.poolForFormat(parsed.learn, F.GEN_VERSION_GROUPS[6]), ["flamethrower"]);
   assert.deepEqual(A.poolForFormat(parsed.learn, ["sword-shield"]), []);
   assert.equal(A.parsePokemon({ name: "a", sprites: { front_default: "javascript:alert(1)" }, moves: [] }).sprite, "");
-  assert.deepEqual(A.parseMove({ type: { name: "fire" }, damage_class: { name: "special" }, priority: 0, power: 90 }), { type: "fire", damageClass: "special", priority: 0, power: 90 });
+  assert.deepEqual(A.parseMove({ type: { name: "fire" }, damage_class: { name: "special" }, priority: 0, power: 90, target: { name: "all-opponents" } }), { type: "fire", damageClass: "special", priority: 0, power: 90, target: "all-opponents" });
   assert.equal(A.minGeneration([{ generation: { name: "generation-v" } }, { generation: { name: "generation-iii" } }]), 3);
   assert.equal(A.minGeneration([]), null);
 });

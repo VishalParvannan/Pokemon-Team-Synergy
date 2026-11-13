@@ -64,7 +64,7 @@
   }
 
   function parseMove(m) {
-    return { type: m.type.name, damageClass: m.damage_class.name, priority: m.priority || 0, power: m.power || 0 };
+    return { type: m.type.name, damageClass: m.damage_class.name, priority: m.priority || 0, power: m.power || 0, target: m.target ? m.target.name : null };
   }
 
   function minGeneration(gameIndices) {

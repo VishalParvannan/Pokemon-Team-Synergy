@@ -80,8 +80,16 @@
     speedControl: ["trick-room", "tailwind", "icy-wind", "electroweb", "thunder-wave", "glare", "bulldoze", "rock-tomb", "scary-face", "string-shot", "sticky-web", "cotton-spore", "low-sweep"],
     phazing: ["roar", "whirlwind", "dragon-tail", "circle-throw", "haze", "clear-smog"],
     status: ["toxic", "will-o-wisp", "thunder-wave", "spore", "sleep-powder", "hypnosis", "glare", "yawn", "stun-spore", "poison-powder", "lovely-kiss", "sing", "dark-void", "nuzzle", "toxic-thread", "taunt", "encore", "trick", "switcheroo", "disable", "imprison", "haze", "leech-seed", "perish-song", "destiny-bond", "substitute", "protect", "detect", "spiky-shield", "kings-shield", "baneful-bunker", "obstruct", "silk-trap", "burning-bulwark", "strength-sap"],
-    weatherMoves: ["sunny-day", "rain-dance", "sandstorm", "snowscape", "hail", "electric-terrain", "grassy-terrain", "misty-terrain", "psychic-terrain"]
+    weatherMoves: ["sunny-day", "rain-dance", "sandstorm", "snowscape", "hail", "electric-terrain", "grassy-terrain", "misty-terrain", "psychic-terrain"],
+    // Doubles-specific
+    fakeOut: ["fake-out"],
+    redirection: ["follow-me", "rage-powder", "ally-switch", "spotlight"],
+    protect: ["protect", "detect", "spiky-shield", "kings-shield", "baneful-bunker", "obstruct", "silk-trap", "burning-bulwark"],
+    support: ["helping-hand", "wide-guard", "quick-guard", "coaching", "decorate", "pollen-puff", "after-you", "instruct", "beat-up"]
   };
+  // Moves that hit more than one target in doubles (PokeAPI move targets); names are the fallback when move data is missing
+  const SPREAD_TARGETS = ["all-other-pokemon", "all-opponents"];
+  const SPREAD_FALLBACK = ["earthquake", "rock-slide", "heat-wave", "dazzling-gleam", "hyper-voice", "surf", "discharge", "blizzard", "icy-wind", "electroweb", "bulldoze", "snarl", "make-it-rain", "eruption", "water-spout", "muddy-water", "sludge-wave", "glacial-lance", "astral-barrage", "boomburst", "parabolic-charge", "lava-plume", "bleakwind-storm", "springtide-storm", "sandsear-storm", "wildbolt-storm"];
   const PRIORITY_FALLBACK = ["extreme-speed", "fake-out", "aqua-jet", "bullet-punch", "ice-shard", "mach-punch", "shadow-sneak", "sucker-punch", "quick-attack", "vacuum-wave", "water-shuriken", "accelerock", "jet-punch", "first-impression", "thunderclap", "upper-hand"];
   const WEATHER_ABILITIES = ["drought", "drizzle", "sand-stream", "snow-warning", "orichalcum-pulse", "hadron-engine", "electric-surge", "grassy-surge", "psychic-surge", "misty-surge", "desolate-land", "primordial-sea", "delta-stream", "sand-spit", "seed-sower"];
 
@@ -89,7 +97,13 @@
     hazards: "Entry hazards", removal: "Hazard removal", recovery: "Recovery", pivot: "Pivoting",
     priority: "Priority moves", setup: "Setup moves", screens: "Screens", speedControl: "Speed control",
     phazing: "Phazing / haze", status: "Status & disruption", weather: "Weather / terrain",
-    intimidate: "Intimidate", physical: "Physical attackers", special: "Special attackers"
+    intimidate: "Intimidate", physical: "Physical attackers", special: "Special attackers",
+    fakeOut: "Fake Out", redirection: "Redirection", protect: "Protect / Detect", spread: "Spread moves", support: "Ally support"
+  };
+  // Which roles the report lists in each battle style
+  const ROLE_KEYS = {
+    singles: ["hazards", "removal", "recovery", "pivot", "priority", "setup", "screens", "speedControl", "phazing", "status", "weather", "intimidate", "physical", "special"],
+    doubles: ["speedControl", "fakeOut", "protect", "spread", "redirection", "support", "intimidate", "weather", "priority", "screens", "setup", "recovery", "physical", "special"]
   };
 
   function memberRoles(member, moveInfo) {
@@ -104,6 +118,7 @@
     if (member.ability === "intimidate") roles.add("intimidate");
     if (moves.some(m => { const i = info(m); return i ? i.priority > 0 && i.damageClass !== "status" : PRIORITY_FALLBACK.includes(m); })) roles.add("priority");
     if (member.item === "choice-scarf") roles.add("speedControl");
+    if (moves.some(m => { const i = info(m); return i && i.target ? i.damageClass !== "status" && SPREAD_TARGETS.includes(i.target) : SPREAD_FALLBACK.includes(m); })) roles.add("spread");
     if (moves.some(m => { const i = info(m); return i && i.damageClass === "physical"; })) roles.add("physical");
     if (moves.some(m => { const i = info(m); return i && i.damageClass === "special"; })) roles.add("special");
     return roles;
@@ -135,17 +150,25 @@
   }
 
   // ---- Score: weighted checklist (documented in SCORE_COMPONENTS, not a competitive rating) ----
-  const SCORE_COMPONENTS = [
-    { id: "offense", label: "Offensive coverage", weight: 30, explain: "40% share of the 18 types hit super-effectively by at least one selected damaging move, 60% share of the 153 dual-type combinations hit super-effectively." },
-    { id: "defense", label: "Defensive balance", weight: 30, explain: "Starts at 100. Subtracts 7 for every extra member weak to a type beyond those that resist or are immune to it (abilities and Air Balloon included), and 4 per 4x weakness." },
-    { id: "roles", label: "Team roles (singles)", weight: 25, explain: "Checklist from selected moves and abilities: entry hazards 15, hazard removal 15, recovery 15 (8 for one user), pivoting 10, speed control or priority 15, physical and special attackers 15 (8 for one kind), setup/screens/status 15." },
-    { id: "completeness", label: "Set completeness", weight: 15, explain: "60% filled slots out of six, 40% how complete each set is (ability, item and four moves)." }
-  ];
+  const ROLES_EXPLAIN = {
+    singles: "Checklist from selected moves and abilities: entry hazards 15, hazard removal 15, recovery 15 (8 for one user), pivoting 10, speed control or priority 15, physical and special attackers 15 (8 for one kind), setup/screens/status 15.",
+    doubles: "Checklist from selected moves and abilities: speed control (Tailwind, Trick Room, Icy Wind, ...) 20, Fake Out 15, Protect on 4+ members 15 (8 for 2-3), spread moves 15, redirection or ally support 10, Intimidate 10, physical and special attackers 15 (8 for one kind)."
+  };
+  function scoreComponents(doubles) {
+    return [
+      { id: "offense", label: "Offensive coverage", weight: 30, explain: "40% share of the 18 types hit super-effectively by at least one selected damaging move, 60% share of the 153 dual-type combinations hit super-effectively." },
+      { id: "defense", label: "Defensive balance", weight: 30, explain: "Starts at 100. Subtracts 7 for every extra member weak to a type beyond those that resist or are immune to it (abilities and Air Balloon included), and 4 per 4x weakness." },
+      { id: "roles", label: doubles ? "Team roles (doubles)" : "Team roles (singles)", weight: 25, explain: doubles ? ROLES_EXPLAIN.doubles : ROLES_EXPLAIN.singles },
+      { id: "completeness", label: "Set completeness", weight: 15, explain: "60% filled slots out of six, 40% how complete each set is (ability, item and four moves)." }
+    ];
+  }
+  const SCORE_COMPONENTS = scoreComponents(false);
 
   function scoreTeam(members, ctx) {
-    const { cov, summary, roles } = ctx;
+    const { cov, summary, roles, doubles } = ctx;
+    const COMPONENTS = scoreComponents(!!doubles);
     if (!members.length) {
-      return { overall: 0, components: SCORE_COMPONENTS.map(c => ({ ...c, score: 0, details: [] })) };
+      return { overall: 0, components: COMPONENTS.map(c => ({ ...c, score: 0, details: [] })) };
     }
     // Offense
     const offense = Math.round(100 * (0.4 * cov.covered.length / 18 + 0.6 * cov.dual.hit / cov.dual.total));
@@ -163,15 +186,25 @@
     const r = roles;
     const pts = [];
     const add = (cond, n, text) => { if (cond) pts.push([n, text]); };
-    add(r.hazards.length >= 1, 15, "has entry hazards");
-    add(r.removal.length >= 1, 15, "has hazard removal");
-    add(r.recovery.length >= 2, 15, "has recovery on 2+ members");
-    add(r.recovery.length === 1, 8, "has recovery on 1 member");
-    add(r.pivot.length >= 1, 10, "has a pivot move");
-    add(r.speedControl.length + r.priority.length >= 1, 15, "has speed control or priority");
+    if (doubles) {
+      add(r.speedControl.length >= 1, 20, "has speed control");
+      add(r.fakeOut.length >= 1, 15, "has Fake Out");
+      add(r.protect.length >= 4, 15, "has Protect on 4+ members");
+      add(r.protect.length >= 2 && r.protect.length < 4, 8, "has Protect on 2-3 members");
+      add(r.spread.length >= 1, 15, "has spread moves");
+      add(r.redirection.length + r.support.length >= 1, 10, "has redirection or ally support");
+      add(r.intimidate.length >= 1, 10, "has Intimidate");
+    } else {
+      add(r.hazards.length >= 1, 15, "has entry hazards");
+      add(r.removal.length >= 1, 15, "has hazard removal");
+      add(r.recovery.length >= 2, 15, "has recovery on 2+ members");
+      add(r.recovery.length === 1, 8, "has recovery on 1 member");
+      add(r.pivot.length >= 1, 10, "has a pivot move");
+      add(r.speedControl.length + r.priority.length >= 1, 15, "has speed control or priority");
+      add(r.setup.length + r.screens.length + r.status.length >= 1, 15, "has setup, screens or status/disruption");
+    }
     add(r.physical.length >= 1 && r.special.length >= 1, 15, "has both physical and special attackers");
     add((r.physical.length >= 1) !== (r.special.length >= 1), 8, "has only one attacking kind");
-    add(r.setup.length + r.screens.length + r.status.length >= 1, 15, "has setup, screens or status/disruption");
     const roleScore = Math.min(100, pts.reduce((a, p) => a + p[0], 0));
     const roleDetails = pts.length ? pts.map(p => `+${p[0]}: ${p[1]}`) : ["No roles found in the selected moves and abilities."];
     // Completeness
@@ -181,7 +214,7 @@
 
     const scores = { offense, defense, roles: roleScore, completeness };
     const details = { offense: offenseDetails, defense: defenseDetails, roles: roleDetails, completeness: completeDetails };
-    const components = SCORE_COMPONENTS.map(c => ({ ...c, score: scores[c.id], details: details[c.id] }));
+    const components = COMPONENTS.map(c => ({ ...c, score: scores[c.id], details: details[c.id] }));
     const overall = Math.round(components.reduce((a, c) => a + c.score * c.weight, 0) / 100);
     return { overall, components };
   }
@@ -217,9 +250,16 @@
     else if (cov.uncovered.length) add("medium", `Selected damaging moves do not hit ${names(cov.uncovered.slice(0, 6))}${cov.uncovered.length > 6 ? ", …" : ""} super-effectively.`, `Move types used: ${names(cov.moveTypes)}.`);
     if (cov.unresolved.length) add("medium", `Could not look up ${names(cov.unresolved)}; they are left out of coverage and role detection.`);
 
-    if (!roles.hazards.length) add("low", "No entry hazard move is selected (in singles, hazards such as Stealth Rock are commonly used).");
-    if (roles.hazards.length && !roles.removal.length) add("low", "The team sets hazards but has no hazard removal (Rapid Spin, Defog and similar).");
-    if (!roles.recovery.length && members.length >= 4) add("low", "No recovery move is selected on any member.");
+    if (ctx.doubles) {
+      if (!roles.speedControl.length) add("medium", "No speed control (Tailwind, Trick Room, Icy Wind, Electroweb, Choice Scarf and similar), which most doubles teams rely on.");
+      if (!roles.fakeOut.length) add("low", "No Fake Out user. It is a common way to take a free turn in doubles.");
+      if (roles.protect.length < 2 && members.length >= 4) add("low", `Only ${roles.protect.length} member(s) carry Protect or Detect; in doubles most sets do.`);
+      if (!roles.spread.length && cov.moveTypes.length) add("low", "No spread moves (Earthquake, Rock Slide, Heat Wave and similar) that hit both opponents.");
+    } else {
+      if (!roles.hazards.length) add("low", "No entry hazard move is selected (in singles, hazards such as Stealth Rock are commonly used).");
+      if (roles.hazards.length && !roles.removal.length) add("low", "The team sets hazards but has no hazard removal (Rapid Spin, Defog and similar).");
+      if (!roles.recovery.length && members.length >= 4) add("low", "No recovery move is selected on any member.");
+    }
     if (!roles.physical.length && !roles.special.length && cov.moveTypes.length) add("low", "No physical or special attacker could be identified from the selected moves.");
 
     members.forEach(m => {
@@ -238,14 +278,19 @@
   }
 
   // Assumptions shown with every report
-  const ASSUMPTIONS = [
-    "Type chart is Generation 6+ (with Fairy); the report does not switch charts per format.",
-    "Defense accounts for typing, the abilities listed in the code (e.g. Levitate, Flash Fire, Thick Fat) and Air Balloon. Mold Breaker, weather, Tera types and other effects are not modelled.",
-    "Coverage uses the type of each selected damaging move. Move power, accuracy, STAB, fixed-damage and variable-type moves are not modelled.",
-    "Roles are detected from move and ability names and assume singles play. Doubles and VGC value other roles (Fake Out, redirection, spread moves).",
-    "Speed uses each set's own level, nature, IVs and EVs, with Choice Scarf. Stat stages, weather and paralysis are ignored.",
-    "The score is a weighted checklist whose weights are judgement calls, tested only for sensible ordering on example teams. It is not a competitive rating."
-  ];
+  function assumptions(doubles) {
+    return [
+      "Type summaries use the Generation 6+ type chart (with Fairy). Damage calculations and threats use the format's own generation mechanics.",
+      "Defense accounts for typing, the abilities listed in the code (e.g. Levitate, Flash Fire, Thick Fat) and Air Balloon. Mold Breaker, weather, Tera types and other effects are not modelled.",
+      "Coverage uses the type of each selected damaging move. Move power, accuracy and STAB are covered by the damage calculator and threat list, not by the coverage summary.",
+      doubles
+        ? "Roles are detected from move and ability names for doubles play (speed control, Fake Out, Protect, spread moves, redirection). VGC-specific rules (level 50, bring six pick four, restricted Pokémon) are not applied."
+        : "Roles are detected from move and ability names and assume singles play. Switch to Doubles to evaluate doubles roles.",
+      "Speed uses each set's own level, nature, IVs and EVs, with Choice Scarf. Stat stages, weather and paralysis are ignored.",
+      "The score is a weighted checklist whose weights are judgement calls, tested only for sensible ordering on example teams. It is not a competitive rating."
+    ];
+  }
+  const ASSUMPTIONS = assumptions(false);
 
   // One call for the whole report. members: filled slots. moveInfo: { move: {type, damageClass, priority} }
   function analyzeTeam(members, moveInfo, opts) {
@@ -254,17 +299,18 @@
     const roles = teamRoles(members, moveInfo);
     const cov = coverage(members, moveInfo);
     const shared = sharedWeaknesses(summary);
-    const score = scoreTeam(members, { cov, summary, roles });
+    const doubles = !!(opts && opts.doubles);
+    const score = scoreTeam(members, { cov, summary, roles, doubles });
     return {
       summary, weaknesses: list("weak"), resistances: list("resist"), immunities: list("immune"),
-      shared, roles, cov, speed: speedTiers(members), score,
-      observations: observations(members, { summary, cov, roles, shared, validation: opts && opts.validation }),
-      assumptions: ASSUMPTIONS
+      shared, roles, roleKeys: doubles ? ROLE_KEYS.doubles : ROLE_KEYS.singles, cov, speed: speedTiers(members), score, doubles,
+      observations: observations(members, { summary, cov, roles, shared, doubles, validation: opts && opts.validation }),
+      assumptions: assumptions(doubles)
     };
   }
 
   return {
-    ABILITY_DEFENSE, ROLE_LABELS, SCORE_COMPONENTS, ASSUMPTIONS,
+    ABILITY_DEFENSE, ROLE_LABELS, ROLE_KEYS, SCORE_COMPONENTS, ASSUMPTIONS, scoreComponents,
     defensiveMultiplier, defensiveSummary, sharedWeaknesses, memberRoles, teamRoles, speedTiers,
     coverage, scoreTeam, observations, analyzeTeam
   };

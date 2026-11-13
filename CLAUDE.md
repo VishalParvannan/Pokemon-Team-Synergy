@@ -11,12 +11,15 @@ Build a trustworthy, approachable Pokémon team builder that helps players under
 - `Frontend/analysis.js`: ability/item-aware defense, coverage, roles, speed, checklist score, observations (pure).
 - `Frontend/api.js`: PokeAPI fetch with retry, response parsers; results go through `Frontend/cache.js` (IndexedDB, 7-day TTL, bump `DATA_VERSION` when a parser's output changes). `?cache=off` bypasses all caching for benchmarks; `window.appPerf` holds startup timings.
 - `bench/`: benchmark fixture and results for the cache.
+- `Frontend/damage.js` + `damage-panel.js`: adapter onto vendored @smogon/calc (`Frontend/vendor/smogon-calc/`, MIT; maps PokeAPI names to Showdown names) and the calculator panel.
+- `Frontend/threats.js`: matchups vs the most-used Pokémon of a format, from snapshots in `Frontend/data/threats/` built by `scripts/build-threats.js` (Smogon usage via data.pkmn.cc).
+- Teams have `format.doubles` (battle style): changes roles, roles score, threats and spread damage. Share links encode the team in the URL fragment (`team.js` encodeShare/decodeShare).
 - `Frontend/controls.js`, `report.js`: DOM widgets and report rendering.
 - `Frontend/stats.html` + `stats.js`: saved teams page.
 - `tests/*.test.js`: `node --test tests/*.test.js`. `.claude/launch.json` serves the repo on port 8090.
 
 ## Status
-Done: everything in the original fix list, plus format-aware learnset/ability/item checks, Species/Item Clause, forms (Mega fallback learnsets), multiple named teams, Showdown/JSON import-export, undo, filtered item list, module split, accessibility pass (tab keyboard nav, labels, focus, contrast, skip link), mobile layout, saved teams page. Not done: tier/ban lists, event-move legality, Gen 1-2 stat system, doubles-specific roles, damage calcs, screen-reader and cross-browser testing.
+Done: everything in the original fix list, plus format-aware learnset/ability/item checks, Species/Item Clause, forms (Mega fallback learnsets), multiple named teams, Showdown/JSON import-export, undo, filtered item list, module split, accessibility pass (tab keyboard nav, labels, focus, contrast, skip link), mobile layout, saved teams page. Also done: persistent cache, damage calculator, threat list, singles/doubles mode, share links. Not done: tier/ban lists, event-move legality, Gen 1-2 stat system, VGC-specific rules, deployment/CI, screen-reader and cross-browser testing.
 
 ## Fix and improve (original list; see Status for progress)
 1. Complete and verify the type chart: the Fairy attacking row and Dragon color are missing. Test all 18 attacking types and dual-type multipliers, including immunities, against an authoritative generation-specific reference.

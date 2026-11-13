@@ -164,6 +164,63 @@ test("observations include rule problems from validation", () => {
   assert.ok(r.observations[0].text.includes("rule problem"));
 });
 
+// A typical doubles core: speed control, Fake Out, redirection, spread moves, Protect everywhere
+const DOUBLES_INFO = {
+  ...INFO,
+  "fake-out": { type: "normal", damageClass: "physical", priority: 3, target: "selected-pokemon" },
+  "tailwind": { type: "flying", damageClass: "status", priority: 0, target: "users-field" },
+  "follow-me": { type: "normal", damageClass: "status", priority: 2, target: "user" },
+  "protect": { type: "normal", damageClass: "status", priority: 4, target: "user" },
+  "heat-wave": { type: "fire", damageClass: "special", priority: 0, target: "all-opponents" },
+  "rock-slide": { type: "rock", damageClass: "physical", priority: 0, target: "all-opponents" },
+  "helping-hand": { type: "normal", damageClass: "status", priority: 5, target: "an-ally" }
+};
+const DOUBLES_TEAM = [
+  mon("incineroar", ["fire", "dark"], base({ ability: "intimidate", item: "sitrus-berry", moves: ["fake-out", "flare-blitz", "knock-off", "protect"] })),
+  mon("tornadus", ["flying"], base({ ability: "prankster", item: "covert-cloak", moves: ["tailwind", "heat-wave", "protect", "helping-hand"] })),
+  mon("amoonguss", ["grass", "poison"], base({ ability: "regenerator", item: "rocky-helmet", moves: ["follow-me", "protect", "earthquake", "moonblast"] })),
+  mon("landorus", ["ground", "flying"], base({ ability: "sheer-force", item: "life-orb", moves: ["rock-slide", "earthquake", "protect", "ice-beam"] }))
+];
+
+test("doubles: roles include speed control, Fake Out, Protect, spread moves and redirection", () => {
+  const roles = A.teamRoles(DOUBLES_TEAM, DOUBLES_INFO);
+  assert.deepEqual(roles.fakeOut, ["incineroar"]);
+  assert.ok(roles.speedControl.includes("tornadus"));
+  assert.equal(roles.protect.length, 4);
+  assert.ok(roles.spread.includes("tornadus") && roles.spread.includes("landorus"));
+  assert.deepEqual(roles.redirection, ["amoonguss"]);
+  assert.deepEqual(roles.support, ["tornadus"]);
+  assert.deepEqual(roles.intimidate, ["incineroar"]);
+});
+
+test("doubles: spread detection uses move targets, falling back to names", () => {
+  const single = mon("a", ["normal"], { moves: ["flamethrower", null, null, null] });
+  assert.ok(!A.memberRoles(single, DOUBLES_INFO).has("spread"));
+  const unknown = mon("a", ["normal"], { moves: ["dazzling-gleam", null, null, null] });
+  assert.ok(A.memberRoles(unknown, {}).has("spread"));
+});
+
+test("doubles: the roles score rewards doubles roles, singles rewards singles roles", () => {
+  const roleScore = (team, doubles) => A.analyzeTeam(team, DOUBLES_INFO, { doubles }).score.components.find(c => c.id === "roles").score;
+  assert.ok(roleScore(DOUBLES_TEAM, true) >= 90, `doubles team in doubles: ${roleScore(DOUBLES_TEAM, true)}`);
+  assert.ok(roleScore(DOUBLES_TEAM, true) > roleScore(DOUBLES_TEAM, false));
+  assert.ok(roleScore(BALANCED, false) > roleScore(BALANCED, true));
+  const r = A.analyzeTeam(DOUBLES_TEAM, DOUBLES_INFO, { doubles: true });
+  assert.equal(r.score.components.find(c => c.id === "roles").label, "Team roles (doubles)");
+  assert.ok(r.roleKeys.includes("fakeOut") && !r.roleKeys.includes("hazards"));
+  assert.match(r.assumptions.join(" "), /doubles play/);
+});
+
+test("doubles: observations swap hazard advice for doubles advice", () => {
+  const noTools = [mon("a", ["water"], base({ moves: ["hydro-pump", "ice-beam", null, null] })), mon("b", ["fire"], base({ moves: ["flamethrower", null, null, null] }))];
+  const d = A.analyzeTeam(noTools, INFO, { doubles: true }).observations.map(o => o.text).join("|");
+  const s = A.analyzeTeam(noTools, INFO, { doubles: false }).observations.map(o => o.text).join("|");
+  assert.match(d, /No speed control/);
+  assert.doesNotMatch(d, /entry hazard/);
+  assert.match(s, /entry hazard/);
+  assert.doesNotMatch(s, /Fake Out/);
+});
+
 test("report always lists its assumptions", () => {
   const r = A.analyzeTeam(BALANCED, INFO);
   assert.ok(r.assumptions.length >= 5);

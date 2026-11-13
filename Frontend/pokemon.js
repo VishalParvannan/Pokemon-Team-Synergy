@@ -161,7 +161,14 @@ const sinceStart = () => Math.round(performance.now());
 async function initApp() {
   store = loadStore();
   setActiveTeam(store.activeTeamId);
+  const shareNotice = await openSharedTeam();
   const hydrated = hydrateTeam(); // marks slots as loading before the first render
+  DamagePanel.init({
+    getSlots: () => slots(),
+    getGenNum: () => currentFormat().era || 9,
+    getPokemonList: () => pokemonCache,
+    isDoubles: () => isDoubles()
+  });
   renderAll();
   await Promise.all([
     hydrated.then(() => { appPerf.teamReadyMs = sinceStart(); }),
@@ -169,6 +176,7 @@ async function initApp() {
   ]);
   appPerf.readyMs = sinceStart();
   performance.mark("app-ready");
+  if (shareNotice && !loadError) setStatus(shareNotice); // shown after loading so the loading message doesn't replace it
 }
 
 async function loadLists() {
@@ -224,6 +232,7 @@ function renderFormatControls() {
   });
   onlyLabel.hidden = !format.gen;
   onlyBox.checked = team.format.introducedOnly;
+  document.getElementById("battleStyle").value = team.format.doubles ? "doubles" : "singles";
   document.getElementById("formatNote").textContent = format.description;
 }
 
@@ -237,6 +246,13 @@ function changeFormat(update) {
 }
 document.getElementById("formatSelect").addEventListener("change", (e) => changeFormat({ id: e.target.value }));
 document.getElementById("introducedOnly").addEventListener("change", (e) => changeFormat({ introducedOnly: e.target.checked }));
+document.getElementById("battleStyle").addEventListener("change", (e) => {
+  team.format.doubles = e.target.value === "doubles";
+  onTeamEdited(); // the report's roles, score and threats depend on the battle style
+  setStatus(team.format.doubles
+    ? "Doubles: the report now checks doubles roles (speed control, Fake Out, Protect, spread moves) and Gen 9 Doubles OU threats."
+    : "Singles: the report checks singles roles (hazards, removal, pivoting) and the format's OU threats.");
+});
 
 // ---- Team management ----
 function renderTeamBar() {
@@ -756,6 +772,7 @@ function renderValidation() {
   else summary.textContent = `${lastValidation.errors} problem(s) and ${lastValidation.warnings} warning(s) found.`;
   panel.innerHTML = real.map(i => `<li class="${i.severity}"><span class="sev">${i.severity === "error" ? "Problem" : "Warning"}</span> ${i.slotIndex !== null ? `<em>Slot ${i.slotIndex + 1}:</em> ` : ""}${esc(i.text)}</li>`).join("");
   document.getElementById("uncheckedList").innerHTML = PokeFormats.limitations(currentFormat()).concat(PokeTeam.UNCHECKED).map(x => `<li>${esc(x)}</li>`).join("");
+  DamagePanel.render(); // runs after every edit, data load and format change, like the checks above
 }
 
 // ---- Import / export ----
@@ -840,6 +857,36 @@ document.getElementById("importIo").addEventListener("click", async () => {
   }
 });
 
+// ---- Threats from usage statistics (small dated snapshots in data/threats/) ----
+const snapshotCache = new Map();
+function loadSnapshot(id) {
+  if (!snapshotCache.has(id)) {
+    const p = fetch(`data/threats/${id}.json`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+    p.catch(() => snapshotCache.delete(id));
+    snapshotCache.set(id, p);
+  }
+  return snapshotCache.get(id);
+}
+
+const SNAPSHOT_LABELS = { gen9doublesou: "Gen 9 Doubles OU" };
+async function computeThreats(members) {
+  if (!PokeThreats || !PokeDamage.available) return { error: "The damage calculator did not load, so threats were not analyzed." };
+  const id = PokeThreats.snapshotFor(currentFormat(), isDoubles());
+  if (!id) return { error: "Doubles usage data is only available for Generation 9, so threats were not analyzed for this format." };
+  const label = SNAPSHOT_LABELS[id] || id.replace(/^gen(\d)ou$/, "Gen $1 OU");
+  try {
+    const snapshot = await loadSnapshot(id);
+    const started = performance.now();
+    const result = PokeThreats.analyzeThreats(currentFormat().era || 9, snapshot, members, { doubles: isDoubles() });
+    appPerf.lastThreatAnalysisMs = Math.round(performance.now() - started);
+    return { result, snapshot, label };
+  } catch (err) {
+    console.error(err);
+    return { error: `Could not load ${label} usage data, so threats were not analyzed.` };
+  }
+}
+const isDoubles = () => !!(team && team.format.doubles);
+
 // ---- Analysis ----
 document.getElementById("analyzeBtn").addEventListener("click", async () => {
   const t = team;
@@ -856,12 +903,21 @@ document.getElementById("analyzeBtn").addEventListener("click", async () => {
     lastValidation = validateNow(facts);
     renderValidation();
 
-    const result = PokeAnalysis.analyzeTeam(filled, PokeApi.cachedMoveInfo(), { validation: lastValidation });
+    const result = PokeAnalysis.analyzeTeam(filled, PokeApi.cachedMoveInfo(), { validation: lastValidation, doubles: isDoubles() });
+    setStatus("Checking matchups against the most-used Pokémon…");
+    const threats = await computeThreats(filled);
+    if (team !== t) return;
+    if (threats.result) {
+      const s = threats.result.summary;
+      const top = threats.result.entries.filter(e => e.level === "high").slice(0, 3).map(e => e.name);
+      if (s.high) result.observations.unshift({ priority: s.high >= 5 ? "high" : "medium", text: `${s.high} of the ${s.considered} most-used ${threats.label} Pokémon ${s.high === 1 ? "is a high-level threat" : "are high-level threats"} to this team${top.length ? ` (e.g. ${top.join(", ")})` : ""}.`, evidence: "See the Threats section: each is checked with damage calculations against your exact sets." });
+    }
     const real = lastValidation.issues.filter(i => i.severity !== "info");
     Report.render(result, {
-      formatLabel: formatLabel(),
+      formatLabel: formatLabel() + (isDoubles() ? " (Doubles)" : " (Singles)"),
       validationSummary: real.length ? `${lastValidation.errors} rule problem(s), ${lastValidation.warnings} warning(s).` : "No rule problems found by the listed checks.",
-      limitations: PokeFormats.limitations(currentFormat())
+      limitations: PokeFormats.limitations(currentFormat()),
+      threats
     });
     setStatus("");
     const section = document.getElementById("analysisSection");
@@ -874,6 +930,32 @@ document.getElementById("analyzeBtn").addEventListener("click", async () => {
     analyzeBtn.disabled = false;
   }
 });
+
+// ---- Share links (team encoded in the URL fragment, which browsers never send to a server) ----
+document.getElementById("shareBtn").addEventListener("click", async () => {
+  if (!slots().some(s => s.name)) { setStatus("Add a Pokémon before sharing."); return; }
+  const url = `${location.origin}${location.pathname}#team=${await PokeTeam.encodeShare(team)}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    setStatus(`Share link copied (${url.length} characters). Anyone opening it gets a copy of "${team.name}" as a new team.`);
+  } catch (err) {
+    prompt("Copy this share link:", url);
+  }
+});
+
+// Opening a share link adds the team as a new saved team (never overwrites one)
+async function openSharedTeam() {
+  const m = location.hash.match(/^#team=([A-Za-z0-9_-]+)$/);
+  if (!m) return "";
+  history.replaceState(null, "", location.pathname + location.search); // reloading should not import it twice
+  const shared = await PokeTeam.decodeShare(m[1], isFormatId);
+  if (!shared) return "That share link is damaged or incomplete, so no team was opened.";
+  shared.name = PokeTeam.cleanName(`${shared.name} (shared)`);
+  store.teams.push(shared);
+  setActiveTeam(shared.id);
+  saveStore();
+  return `Opened shared team "${shared.name}". It is saved as a new team in this browser.`;
+}
 
 document.getElementById("clearCacheBtn").addEventListener("click", async () => {
   await PokeApi.clearCache();

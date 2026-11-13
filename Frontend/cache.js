@@ -6,7 +6,7 @@
   if (typeof module === "object" && module.exports) module.exports = factory();
   else root.PokeCache = factory();
 })(typeof self !== "undefined" ? self : this, function () {
-  const DATA_VERSION = 1;
+  const DATA_VERSION = 2; // 2: move info gained `target` (spread-move detection)
   const TTL_MS = 7 * 24 * 60 * 60 * 1000;
   const DB_NAME = "pokemon-team-synergy-cache";
   const STORE = "kv";

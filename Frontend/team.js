@@ -65,7 +65,7 @@
 
   function cleanFormat(f, isFormatId) {
     const id = f && typeof f.id === "string" && (!isFormatId || isFormatId(f.id)) ? f.id : "any";
-    return { id, introducedOnly: !!(f && f.introducedOnly === true) };
+    return { id, introducedOnly: !!(f && f.introducedOnly === true), doubles: !!(f && f.doubles === true) };
   }
 
   function createTeam(name, format) {
@@ -224,6 +224,55 @@
     return team ? { team } : { error: "The export does not contain a usable team." };
   }
 
+  // ---- Share links: the team travels in the URL fragment (never sent to a server) ----
+  // Only the choices are encoded; species data (types, stats, sprite, learnsets) is reloaded from PokeAPI.
+  const SHARE_KEYS = ["name", "ability", "item", "level", "nature", "moves", "evs", "ivs"];
+
+  function toShareable(team) {
+    return {
+      v: 1, n: team.name, f: team.format,
+      s: team.slots.map(s => s.name ? Object.fromEntries(SHARE_KEYS.map(k => [k, s[k]])) : null)
+    };
+  }
+
+  function fromShareable(obj, isFormatId) {
+    if (!obj || obj.v !== 1 || !Array.isArray(obj.s)) return null;
+    return sanitizeTeam({ name: obj.n, format: obj.f, slots: obj.s.map(s => s || {}) }, isFormatId);
+  }
+
+  const b64urlEncode = (bytes) => {
+    let bin = "";
+    bytes.forEach(b => { bin += String.fromCharCode(b); });
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  };
+  const b64urlDecode = (str) => {
+    const bin = atob(str.replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(bin, c => c.charCodeAt(0));
+  };
+  async function pipe(bytes, stream) {
+    const out = new Response(new Blob([bytes]).stream().pipeThrough(stream));
+    return new Uint8Array(await out.arrayBuffer());
+  }
+
+  // "z" + deflate-compressed JSON where CompressionStream exists, otherwise "j" + plain JSON
+  async function encodeShare(team) {
+    const json = new TextEncoder().encode(JSON.stringify(toShareable(team)));
+    if (typeof CompressionStream === "function") return "z" + b64urlEncode(await pipe(json, new CompressionStream("deflate-raw")));
+    return "j" + b64urlEncode(json);
+  }
+
+  async function decodeShare(code, isFormatId) {
+    try {
+      if (typeof code !== "string" || code.length > 20000) return null;
+      let bytes = b64urlDecode(code.slice(1));
+      if (code[0] === "z") bytes = await pipe(bytes, new DecompressionStream("deflate-raw"));
+      else if (code[0] !== "j") return null;
+      return fromShareable(JSON.parse(new TextDecoder().decode(bytes)), isFormatId);
+    } catch (err) {
+      return null; // corrupted or truncated link
+    }
+  }
+
   // ---- Validation ----
   const UNCHECKED = [
     "Tier bans, restricted-legendary limits and other official-rule-set bans.",
@@ -316,6 +365,7 @@
   return {
     STORE_VERSION, SLOT_COUNT, UNCHECKED,
     createEmptySlot, sanitizeSlot, serializeSlot, createTeam, sanitizeTeam, sanitizeStore, migrateV1, serializeStore,
-    pretty, normalizeId, resolveSpecies, toShowdown, parseShowdown, exportJson, parseJson, validateTeam, cleanName
+    pretty, normalizeId, resolveSpecies, toShowdown, parseShowdown, exportJson, parseJson, validateTeam, cleanName,
+    toShareable, fromShareable, encodeShare, decodeShare
   };
 });

@@ -468,6 +468,7 @@ button.overview-card { font: inherit; color: inherit; }
 .format-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; }
 .format-row .selector-label { margin: 0; }
 .format-select { width: auto; min-width: 240px; padding: 8px 10px; font-size: 14px; text-align: left; background: var(--panel); cursor: pointer; }
+.format-select.narrow { min-width: 120px; }
 .format-option { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-muted); }
 .format-option[hidden] { display: none; }
 .format-note { flex-basis: 100%; font-size: 12px; color: var(--text-muted); }
@@ -550,6 +551,35 @@ details summary { cursor: pointer; font-size: 12px; color: var(--text-muted); }
 .stat-list .none { color: var(--text-faint); }
 .rec-evidence { font-size: 11px; color: var(--text-muted); }
 .type-pill.uncovered { color: #c0c6dc; }
+
+/* Threat list */
+.threats-card { margin-bottom: 24px; }
+.threat-list { list-style: none; display: grid; gap: 8px; margin-top: 8px; }
+.threat { background: #0b0e1a; border: 1px solid #1f2640; border-left: 3px solid #8b5cf6; border-radius: 6px; padding: 10px 12px; font-size: 13px; }
+.threat.high { border-left-color: var(--accent); }
+.threat.medium { border-left-color: #f59e0b; }
+.threat-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.threat-level { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #c4b5fd; }
+.threat-level.high { color: #fca5a5; }
+.threat-level.medium { color: #fde68a; }
+.threat-reasons { font-size: 12px; margin-top: 2px; }
+.evidence-inline { font-size: 11px; color: var(--text-muted); }
+.threat details { margin-top: 4px; }
+
+/* Damage calculator */
+.damage-panel { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; }
+.damage-panel h2 { font-size: 15px; margin-bottom: 6px; }
+.damage-panel a { color: var(--text-muted); }
+.damage-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 16px; align-items: end; }
+.damage-result { margin-top: 8px; font-size: 13px; }
+.calc-headline { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.calc-headline strong { font-size: 18px; }
+.calc-headline span { color: #fde68a; font-weight: 600; }
+.calc-bar { position: relative; height: 10px; background: #1b2038; border-radius: 5px; overflow: hidden; margin-bottom: 8px; }
+.calc-bar-max { position: absolute; inset: 0 auto 0 0; background: #f59e0b; opacity: 0.5; }
+.calc-bar-min { position: absolute; inset: 0 auto 0 0; background: #f59e0b; z-index: 1; }
+.calc-desc { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--text-main); word-break: break-word; }
+.calc-error { color: #fca5a5; }
 
 .site-footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 12px; color: var(--text-muted); }
 .site-footer a { color: var(--text-muted); }

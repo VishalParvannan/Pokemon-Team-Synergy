@@ -62,7 +62,8 @@ const Report = (function () {
       `<li>${esc(formatName(st.name))} — ${st.effective} Spe${st.note ? ` (${esc(st.note)})` : ""} <span class="evidence">Lv ${st.level}</span></li>`).join(""));
 
     // Roles
-    const roleRows = Object.keys(A.ROLE_LABELS).map(r => {
+    document.getElementById("rolesTitle").textContent = `Team roles (${result.doubles ? "doubles" : "singles"}, from moves and abilities)`;
+    const roleRows = result.roleKeys.map(r => {
       const who = result.roles[r];
       return `<li><strong>${esc(A.ROLE_LABELS[r])}</strong>: ${who.length ? esc(names(who)) : "<span class='none'>none</span>"}</li>`;
     });
@@ -77,6 +78,53 @@ const Report = (function () {
       </div>`).join(""));
 
     set("assumptionsList", result.assumptions.concat(ctx.limitations).map(a => `<li>${esc(a)}</li>`).join(""));
+    renderThreats(ctx.threats);
+  }
+
+  const pct = (x) => `${Math.round(x * 1000) / 10}%`;
+
+  function threatRow(e) {
+    const set = e.set;
+    const answer = e.bestAnswer
+      ? `${esc(formatName(e.bestAnswer.name))}'s ${esc(formatName(e.bestAnswer.move))} does ${e.bestAnswer.minPct}–${e.bestAnswer.maxPct}%`
+      : "none of your moves damage it";
+    const faster = e.vs.filter(v => v.faster === "you").map(v => v.name);
+    return `
+      <li class="threat ${e.level}">
+        <div class="threat-head">
+          <span class="threat-level ${e.level}">${e.level}</span>
+          <strong>${esc(e.name)}</strong>
+          <span class="evidence-inline">${pct(e.usage)} usage</span>
+        </div>
+        ${e.reasons.length ? `<div class="threat-reasons">${esc(e.reasons.join("; "))}</div>` : ""}
+        <div class="evidence">
+          OHKOs: ${e.ohkoed.length ? esc(names(e.ohkoed)) : "none"} ·
+          Safe switch-ins: ${e.safeSwitchIns.length ? esc(names(e.safeSwitchIns)) : "none"} ·
+          Best answer: ${answer} ·
+          Faster than it: ${faster.length ? esc(names(faster)) : "none"}
+        </div>
+        <details><summary>Assumed set and every matchup</summary>
+          <div class="evidence">${esc([set.item, set.ability, set.nature, Object.entries(set.evs || {}).map(([k, v]) => `${v} ${k.toUpperCase()}`).join(" / ")].filter(Boolean).join(" · "))} · ${esc(set.moves.join(", "))}</div>
+          <ul class="plain-list">${e.vs.map(v => `<li>${esc(formatName(v.name))}: takes ${v.incoming ? `${v.incoming.minPct}–${v.incoming.maxPct}% (${esc(v.incoming.move)})` : "no damage"}, deals ${v.outgoing ? `${v.outgoing.minPct}–${v.outgoing.maxPct}% (${esc(formatName(v.outgoing.move))})` : "no damage"}${v.faster ? `, ${v.faster === "you" ? "faster" : v.faster === "tie" ? "speed tie" : "slower"}` : ""}</li>`).join("")}</ul>
+        </details>
+      </li>`;
+  }
+
+  function renderThreats(t) {
+    const intro = document.getElementById("threatsIntro");
+    const list = document.getElementById("threatsList");
+    const title = document.getElementById("threatsTitle");
+    if (!t) { title.textContent = "Threats from usage statistics"; intro.textContent = ""; list.innerHTML = ""; return; }
+    if (t.error) { intro.textContent = t.error; list.innerHTML = ""; return; }
+    const { result, snapshot, label } = t;
+    title.textContent = `Threats: the ${result.summary.considered} most-used ${label} Pokémon`;
+    intro.textContent = `${result.summary.high} high and ${result.summary.medium} medium threats; ${result.summary.noSafeSwitch} have no safe switch-in on your team. ` +
+      `Each threat uses its most common set from ${snapshot.source} (${snapshot.battles.toLocaleString()} battles, fetched ${snapshot.fetched}). ` +
+      `Safe switch-in = takes at most ${result.thresholds.SAFE_SWITCH_MAX}% from its strongest move; damage uses your exact sets, ignores Tera, hazards, boosts and partial HP.`;
+    const shown = result.entries.slice(0, 12);
+    const rest = result.entries.slice(12);
+    list.innerHTML = `<ul class="threat-list">${shown.map(threatRow).join("")}</ul>` +
+      (rest.length ? `<details><summary>Show ${rest.length} more</summary><ul class="threat-list">${rest.map(threatRow).join("")}</ul></details>` : "");
   }
 
   return { render };

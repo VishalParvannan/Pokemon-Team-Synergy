@@ -4,12 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Saved Teams — Pokémon Team Synergy</title>
+  <meta name="description" content="Every Pokémon team saved in this browser, with a defensive summary of each." />
   <link rel="icon" href="data:," />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="wrap">
+  <main class="wrap">
     <header>
       <div class="lens" aria-hidden="true"></div>
       <h1>Saved<br/>Teams</h1>
@@ -17,10 +18,11 @@
     </header>
     <p class="subtitle">Every team saved in this browser, with a type-only defensive summary. Open a team in the builder to edit it or run the full analysis.</p>
     <div id="teamsList" class="teams-list"></div>
-  </div>
+  </main>
   <script src="logic.js"></script>
   <script src="formats.js"></script>
   <script src="team.js"></script>
+  <script src="viability.js"></script>
   <script src="analysis.js"></script>
   <script src="controls.js"></script>
   <script src="stats.js"></script>

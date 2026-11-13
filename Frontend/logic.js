@@ -47,10 +47,50 @@
     calm: ["spd", "atk"], gentle: ["spd", "def"], sassy: ["spd", "spe"], careful: ["spd", "spa"]
   };
 
-  function getDefensiveMultiplier(defendingTypes, attackingType) {
-    const row = TYPE_CHART[attackingType];
+  // ---- Older generations (checked against Pokémon Showdown's per-generation data in tests) ----
+  // Gen 2-5: no Fairy; Steel also resisted Ghost and Dark.
+  // Gen 1: no Dark or Steel either; Ghost had no effect on Psychic (a game bug), Bug and Poison were
+  // super effective against each other, and Ice was neutral against Fire.
+  function typesFor(gen) {
+    if (gen && gen <= 1) return ALL_TYPES.filter(t => !["dark", "steel", "fairy"].includes(t));
+    if (gen && gen <= 5) return ALL_TYPES.filter(t => t !== "fairy");
+    return ALL_TYPES;
+  }
+
+  const chartCache = {};
+  function typeChartFor(gen) {
+    const key = !gen || gen >= 6 ? 6 : gen <= 1 ? 1 : 2;
+    if (chartCache[key]) return chartCache[key];
+    const types = typesFor(key);
+    const chart = {};
+    types.forEach(a => {
+      chart[a] = {};
+      Object.entries(TYPE_CHART[a]).forEach(([d, m]) => { if (types.includes(d)) chart[a][d] = m; });
+    });
+    if (key === 2) { chart.ghost.steel = 0.5; chart.dark.steel = 0.5; }
+    if (key === 1) {
+      chart.ghost.psychic = 0;
+      chart.bug.poison = 2;
+      chart.poison.bug = 2;
+      delete chart.ice.fire;
+    }
+    chartCache[key] = chart;
+    return chart;
+  }
+
+  // gen: game generation (defaults to the current, Gen 6+ chart)
+  function getDefensiveMultiplier(defendingTypes, attackingType, gen) {
+    const row = typeChartFor(gen)[attackingType];
     if (!row) return 1;
     return defendingTypes.reduce((m, dt) => m * (row[dt] !== undefined ? row[dt] : 1), 1);
+  }
+
+  // A Pokémon's types in a given generation. pastTypes: [{ gen, types }] where `types` applied up to
+  // and including `gen` (PokeAPI past_types), e.g. Clefable was Normal through Gen 5.
+  function typesInGen(currentTypes, pastTypes, gen) {
+    if (!gen || !pastTypes || !pastTypes.length) return currentTypes;
+    const applicable = pastTypes.filter(p => gen <= p.gen).sort((a, b) => a.gen - b.gen)[0];
+    return applicable ? applicable.types : currentTypes;
   }
 
   function natureModifier(nature, statKey) {
@@ -100,30 +140,31 @@
   }
 
   // Types that `moveTypes` hit super-effectively, per single defending type.
-  function coveredTypes(moveTypes) {
-    return ALL_TYPES.filter(target =>
-      moveTypes.some(t => getDefensiveMultiplier([target], t) > 1));
+  function coveredTypes(moveTypes, gen) {
+    return typesFor(gen).filter(target =>
+      moveTypes.some(t => getDefensiveMultiplier([target], t, gen) > 1));
   }
 
-  // Dual-type targets (all unordered pairs) hit super-effectively by at least one of `moveTypes`.
-  function dualTypeCoverage(moveTypes) {
+  // Dual-type targets (all unordered pairs of the generation's types) hit super-effectively by at least one of `moveTypes`.
+  function dualTypeCoverage(moveTypes, gen) {
+    const types = typesFor(gen);
     let hit = 0, total = 0;
-    for (let i = 0; i < ALL_TYPES.length; i++) {
-      for (let j = i + 1; j < ALL_TYPES.length; j++) {
+    for (let i = 0; i < types.length; i++) {
+      for (let j = i + 1; j < types.length; j++) {
         total++;
-        if (moveTypes.some(t => getDefensiveMultiplier([ALL_TYPES[i], ALL_TYPES[j]], t) > 1)) hit++;
+        if (moveTypes.some(t => getDefensiveMultiplier([types[i], types[j]], t, gen) > 1)) hit++;
       }
     }
     return { hit, total };
   }
 
   // Per attacking type: how many members are weak, resist and are immune.
-  function defensiveSummary(members) {
+  function defensiveSummary(members, gen) {
     const summary = {};
-    ALL_TYPES.forEach(atk => {
+    typesFor(gen).forEach(atk => {
       let weak = 0, resist = 0, immune = 0;
       members.forEach(m => {
-        const mult = getDefensiveMultiplier(m.types, atk);
+        const mult = getDefensiveMultiplier(m.types, atk, gen);
         if (mult === 0) immune++;
         else if (mult > 1) weak++;
         else if (mult < 1) resist++;
@@ -135,7 +176,7 @@
 
   return {
     ALL_TYPES, TYPE_CHART, STAT_KEYS, NATURES, MAX_EV_TOTAL, MAX_EV_STAT, MAX_IV,
-    getDefensiveMultiplier, natureModifier, clampInt, calcStat, calcAllStats,
+    typesFor, typeChartFor, typesInGen, getDefensiveMultiplier, natureModifier, clampInt, calcStat, calcAllStats,
     evTotal, clampEv, coveredTypes, dualTypeCoverage, defensiveSummary
   };
 });

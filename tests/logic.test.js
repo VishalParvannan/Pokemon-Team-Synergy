@@ -36,6 +36,58 @@ test("dual-type 4x, 1/4x and immunity", () => {
   assert.equal(m(["steel", "ground"], "poison"), 0);
 });
 
+// Independent reference: Pokémon Showdown's per-generation type data, shipped inside @smogon/calc
+function showdownTypes(genNum) {
+  const fs = require("fs"), path = require("path"), vm = require("vm");
+  const ctx = { window: {}, console };
+  ctx.self = ctx.window;
+  vm.createContext(ctx);
+  for (const f of ["data.min.js", "calc.min.js"]) vm.runInContext(fs.readFileSync(path.join(__dirname, "../Frontend/vendor/smogon-calc", f), "utf8"), ctx);
+  return ctx.window.calc.Generations.get(genNum).types;
+}
+
+test("type charts match Pokémon Showdown for every generation and every type pair", () => {
+  for (let gen = 1; gen <= 9; gen++) {
+    const sd = showdownTypes(gen);
+    const sdTypes = [...sd].map(t => t.name.toLowerCase()).filter(t => L.ALL_TYPES.includes(t));
+    assert.deepEqual([...L.typesFor(gen)].sort(), sdTypes.sort(), `types in gen ${gen}`);
+    for (const atk of sdTypes) for (const def of sdTypes) {
+      const expected = sd.get(atk).effectiveness[def.charAt(0).toUpperCase() + def.slice(1)];
+      assert.equal(L.getDefensiveMultiplier([def], atk, gen), expected, `gen ${gen}: ${atk} -> ${def}`);
+    }
+  }
+});
+
+test("older-generation chart quirks", () => {
+  assert.equal(L.getDefensiveMultiplier(["psychic"], "ghost", 1), 0); // Gen 1 bug
+  assert.equal(L.getDefensiveMultiplier(["psychic"], "ghost", 2), 2);
+  assert.equal(L.getDefensiveMultiplier(["steel"], "dark", 4), 0.5);
+  assert.equal(L.getDefensiveMultiplier(["steel"], "dark", 6), 1);
+  assert.equal(L.typesFor(1).length, 15);
+  assert.equal(L.typesFor(5).length, 17);
+  assert.equal(L.typesFor(9).length, 18);
+  assert.equal(L.typesFor(null).length, 18);
+  assert.equal(L.dualTypeCoverage(["ground"], 1).total, 105);
+  assert.equal(L.dualTypeCoverage(["ground"], 5).total, 136);
+  assert.ok(!L.coveredTypes(["fighting"], 5).includes("fairy"));
+});
+
+test("Pokémon types by generation (PokeAPI past_types)", () => {
+  const clefablePast = [{ gen: 5, types: ["normal"] }];
+  assert.deepEqual(L.typesInGen(["fairy"], clefablePast, 4), ["normal"]);
+  assert.deepEqual(L.typesInGen(["fairy"], clefablePast, 5), ["normal"]);
+  assert.deepEqual(L.typesInGen(["fairy"], clefablePast, 6), ["fairy"]);
+  assert.deepEqual(L.typesInGen(["fairy"], clefablePast, null), ["fairy"]);
+  const magnemitePast = [{ gen: 1, types: ["electric"] }];
+  assert.deepEqual(L.typesInGen(["electric", "steel"], magnemitePast, 1), ["electric"]);
+  assert.deepEqual(L.typesInGen(["electric", "steel"], magnemitePast, 2), ["electric", "steel"]);
+  // Several changes: the earliest entry that still covers the generation applies
+  const multi = [{ gen: 2, types: ["a"] }, { gen: 5, types: ["b"] }];
+  assert.deepEqual(L.typesInGen(["c"], multi, 1), ["a"]);
+  assert.deepEqual(L.typesInGen(["c"], multi, 3), ["b"]);
+  assert.deepEqual(L.typesInGen(["c"], multi, 7), ["c"]);
+});
+
 test("stat calculation (Garchomp lvl 100, known values)", () => {
   // Garchomp base 108/130/95/80/85/102, 31 IVs, 252 Atk / 252 Spe / 4 HP, Jolly
   const slot = {

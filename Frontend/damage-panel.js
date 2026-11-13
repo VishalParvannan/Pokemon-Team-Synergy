@@ -2,11 +2,20 @@
 // Pokémon with an assumed spread. Recalculates on every change. Browser-only.
 const DamagePanel = (function () {
   const { esc, formatName, createSearchBox } = UI;
-  const D = PokeDamage;
+  let D = null; // window.PokeDamage, available once calc-loader.js has loaded the calculator
+  let loadFailed = false;
   let deps = null; // { getSlots, getGenNum, getPokemonList, isDoubles }
   const state = { attacker: 0, move: null, defender: "team:1", other: null, spread: "none", crit: false, weather: "" };
 
-  function init(d) { deps = d; render(); }
+  // The calculator bundle loads when this panel is about to scroll into view
+  function init(d) {
+    deps = d;
+    render();
+    CalcLoader.loadWhenVisible(document.querySelector(".damage-panel"), () => {
+      loadFailed = !CalcLoader.ready();
+      render();
+    });
+  }
 
   function select(id, label, options, value, onChange) {
     const wrap = document.createElement("div");
@@ -42,7 +51,11 @@ const DamagePanel = (function () {
     const out = document.getElementById("damageResult");
     if (!panel || !deps) return;
     panel.innerHTML = "";
-    if (!D.available) { out.textContent = "The damage calculator failed to load."; return; }
+    D = window.PokeDamage;
+    if (!D || !D.available) {
+      out.textContent = loadFailed ? "The damage calculator failed to load. Reload the page to try again." : "Loading the damage calculator…";
+      return;
+    }
 
     const slots = deps.getSlots();
     const filled = slots.map((s, i) => ({ s, i })).filter(x => x.s.name);

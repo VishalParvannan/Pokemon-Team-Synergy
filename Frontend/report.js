@@ -27,7 +27,10 @@ const Report = (function () {
     const { overall, components } = result.score;
     setText("overallScoreNum", overall);
     document.getElementById("overallScoreCircle").className = `score-circle ${scoreColor(overall)}`;
-    setText("gradeLabel", "Calibrated team score (a rough signal, not a competitive rating)");
+    const ref = result.score.calibration && result.score.calibration.means;
+    setText("gradeLabel", ref
+      ? `For reference: expert teams average ${ref.expert}, random teams of popular sets ${ref.popular}, fully random teams ${ref.random}.`
+      : "Calibrated team score (a rough signal, not a competitive rating)");
     set("scoreMetrics", components.map(c => `
       <div class="metric-row">
         <span>${esc(c.label)} <small>(${c.weight}%)</small></span>
@@ -35,7 +38,8 @@ const Report = (function () {
         <span class="metric-val">${c.score}</span>
       </div>`).join(""));
     const cal = result.score.calibration;
-    const calibrationNote = cal ? `<p><strong>How well it works:</strong> the weights were calibrated on ${cal.experts} Smogon sample teams against ${cal.baselines.toLocaleString()} random teams built from the same formats' most common sets. On held-out teams, an expert team outscores a random one ${Math.round(cal.testAuc * 100)}% of the time (95% interval ${Math.round(cal.ci95[0] * 100)}–${Math.round(cal.ci95[1] * 100)}%; 50% would be chance, ${Math.round(cal.before * 100)}% before calibration). Treat it as a rough signal.${result.score.threatsIncluded ? "" : " Threat matchups are not part of this score (no usage data for this format), so the other weights were scaled up."}</p>` : "";
+    const pct = (x) => Math.round(x * 100);
+    const calibrationNote = cal ? `<p><strong>How well it works:</strong> the weights were calibrated on ${cal.experts} Smogon sample teams, ${cal.popular.toLocaleString()} random teams of popular sets and ${cal.random.toLocaleString()} fully random teams. On held-out teams, an expert team outscores a fully random team ${pct(cal.vsRandom)}% of the time, but a random team of popular sets only ${pct(cal.vsPopular)}% of the time (95% interval ${pct(cal.vsPopularCi95[0])}–${pct(cal.vsPopularCi95[1])}%; 50% would be chance). So it reliably flags unviable teams and only roughly ranks strong ones.${result.score.threatsIncluded ? "" : " Threat matchups are not part of this score (no usage data for this format), so the other weights were scaled up."}</p>` : "";
     set("scoreExplain", calibrationNote + components.map(c => `
       <h4>${esc(c.label)} — ${c.score}/100 (weight ${c.weight}%)</h4>
       <p>${esc(c.explain)}</p>
@@ -44,7 +48,7 @@ const Report = (function () {
     // Coverage
     const cov = result.cov;
     setText("superEffectiveText", cov.moveTypes.length
-      ? `Hit super-effectively by selected damaging moves: ${cov.covered.length}/18 types, ${cov.dual.hit}/${cov.dual.total} dual-type combinations. Move types: ${names(cov.moveTypes)}.`
+      ? `Hit super-effectively by selected damaging moves: ${cov.covered.length}/${cov.typeCount} types, ${cov.dual.hit}/${cov.dual.total} dual-type combinations. Move types: ${names(cov.moveTypes)}.`
       : "No damaging moves are selected, so there is no coverage to show.");
     set("coveredTypesGrid", cov.covered.map(t => pill(t)).join("") || "<span class='sub-text'>None</span>");
     set("uncoveredTypesGrid", cov.uncovered.map(t => pill(t, "uncovered")).join(""));
@@ -58,6 +62,18 @@ const Report = (function () {
     set("sharedWeakList", result.shared.length
       ? result.shared.map(s => `<li><strong>${esc(formatName(s.type))}</strong> hits ${s.weakNames.length}: ${esc(names(s.weakNames))}<span class="evidence">${s.answers.length ? "Can take it: " + esc(names(s.answers)) : "Nothing on the team resists or is immune to it."}</span></li>`).join("")
       : "<li>No type hits two or more members super-effectively.</li>");
+
+    // Viability (per Pokémon, weakest first)
+    const via = result.viability;
+    if (via && via.members.length) {
+      setText("viabilityIntro", `Team average ${via.score}/100. Each Pokémon is graded on base stats compared with the format's most-used Pokémon, being fully evolved (or holding Eviolite), its strongest attack, moves that earn their slot, an item that helps it, and EV investment.`);
+      set("viabilityList", via.members.slice().sort((a, b) => a.score - b.score).map(p => `
+        <li><strong>${esc(formatName(p.name))}</strong> — ${p.score}/100${p.unevolved ? " · not fully evolved" : ""}
+          <span class="evidence">${p.issues.length ? esc(p.issues.join("; ")) : "No problems found."}</span></li>`).join(""));
+    } else {
+      setText("viabilityIntro", "");
+      set("viabilityList", "");
+    }
 
     // Speed
     set("speedTiersList", result.speed.map(st =>

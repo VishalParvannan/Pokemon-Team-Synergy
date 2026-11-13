@@ -56,7 +56,6 @@
     const out = [];
     if (format.era !== null && format.era !== undefined) {
       if (format.era <= 2) out.push("Generation 1–2 used a different stat system (DVs and stat experience); calculated stats here use the Generation 3+ formula.");
-      if (format.era <= 5) out.push("The type chart includes Fairy (Generation 6+); older generations had no Fairy type and some different matchups.");
     }
     out.push("Tier bans, restricted-legendary limits, event-only move combinations and level or species restrictions of official rule sets are not checked.");
     return out;

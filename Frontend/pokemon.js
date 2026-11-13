@@ -33,6 +33,8 @@ let undoAction = null;
 const isFormatId = (id) => FORMATS.some(f => f.id === id);
 const slots = () => team.slots;
 const currentFormat = () => findFormat(team.format.id);
+// A slot's types in the current format's generation (e.g. Clefable is Normal before Gen 6)
+const eraTypes = (slot) => PokeLogic.typesInGen(slot.types, slot.pastTypes, currentFormat().era);
 
 // ---- Persistence (local only, versioned; the old single-team keys are read but never deleted) ----
 function loadStore() {
@@ -120,6 +122,7 @@ function applyParsed(slot, parsed) {
   slot.species = parsed.species;
   slot.sprite = parsed.sprite;
   slot.types = parsed.types.filter(t => ALL_TYPES.includes(t));
+  slot.pastTypes = parsed.pastTypes || [];
   slot.abilities = parsed.abilities.map(a => a.name);
   slot.hiddenAbilities = parsed.abilities.filter(a => a.hidden).map(a => a.name);
   STAT_KEYS.forEach(k => { if (parsed.stats[k]) slot.stats[k] = parsed.stats[k]; });
@@ -402,7 +405,7 @@ function renderOverview(container) {
         <div class="card-head">
           <div>
             <strong>${esc(formatName(slot.name))}</strong> ${slotIssueBadge(idx)}
-            <div class="card-types">${slot.types.map(typeBadge).join(" ")}</div>
+            <div class="card-types">${eraTypes(slot).map(typeBadge).join(" ")}</div>
           </div>
           ${spriteImg(slot.sprite, 64)}
         </div>
@@ -442,7 +445,7 @@ function renderPokemonEditor(container, slotIdx) {
   if (slot.name) {
     const preview = document.createElement("div");
     preview.className = "preview";
-    preview.innerHTML = `${spriteImg(slot.sprite, 120, "margin: 0 auto;")}<div class="card-types">${slot.types.map(typeBadge).join(" ")}</div>
+    preview.innerHTML = `${spriteImg(slot.sprite, 120, "margin: 0 auto;")}<div class="card-types">${eraTypes(slot).map(typeBadge).join(" ")}</div>
       ${slot.species && slot.species !== slot.name ? `<div class="field-hint">Form of ${esc(formatName(slot.species))}</div>` : ""}`;
     leftCol.appendChild(preview);
 
@@ -604,6 +607,7 @@ const shuffled = (arr) => [...arr].sort(() => 0.5 - Math.random());
 // (Mega/Primal/Gigantamax, Zen Mode, Terastal, Ultra Necrozma, Crowned, Aegislash Blade, Schooling, etc.)
 const BATTLE_ONLY_FORM = /-(mega|primal|gmax|eternamax|zen|terastal|stellar|ultra|crowned|blade|school|pirouette|noice|hangry|busted|gulping|gorging|sunshine|complete|hero|totem)(-|$)/;
 const MAX_RANDOM_CANDIDATES = 60;
+const MOVE_SAMPLE = 40; // attacks looked up per Pokémon when building a random set
 
 async function generateRandomTeam() {
   if (pokemonCache.length === 0) {
@@ -628,6 +632,13 @@ async function generateRandomTeam() {
   const era = format.era;
   const previous = t.slots.map(PokeTeam.serializeSlot);
 
+  // Evolution data (for Eviolite) comes from the calculator bundle; random teams work without it
+  let speciesLookup = null;
+  try {
+    await CalcLoader.ensure();
+    if (window.PokeDamage) speciesLookup = (n) => window.PokeDamage.speciesInfo(era || 9, n);
+  } catch (err) { /* no Eviolite in random sets */ }
+
   const generated = [];
   const usedSpecies = new Set();
   const usedItems = new Set();
@@ -642,39 +653,49 @@ async function generateRandomTeam() {
       const slot = newSlotFrom(name, parsed);
       if (!slot.movePool.length) continue; // no learnset in this format's games: skip rather than build an unverifiable set
 
-      // Ability: none before Gen 3, no hidden abilities before Gen 5, none introduced after the format's generation
+      // Ability: one this species can have, none before Gen 3, no hidden abilities before Gen 5,
+      // none introduced after the format's generation; abilities that hold it back only as a last resort
       slot.ability = null;
       if (era === null || era >= 3) {
-        for (const a of shuffled(slot.abilities.filter(a => era === null || era >= 5 || !slot.hiddenAbilities.includes(a)))) {
+        const legal = slot.abilities.filter(a => era === null || era >= 5 || !slot.hiddenAbilities.includes(a));
+        const ordered = [...shuffled(legal.filter(a => !PokeViability.HANDICAP_ABILITIES.includes(a))), ...legal.filter(a => PokeViability.HANDICAP_ABILITIES.includes(a))];
+        for (const a of ordered) {
           const gen = era === null ? null : await PokeApi.getAbilityGeneration(a);
           if (gen && gen > era) continue;
           slot.ability = a;
           break;
         }
       }
-      // Item: none in Gen 1, unique across the team, not introduced after the format's generation
+      // Moves: a strong same-type attack, coverage and useful utility, from what it learns in this format.
+      // Move data is fetched for the recognised utility moves plus a sample of the rest (cached after the first time).
+      const utilityNames = new Set([...PokeViability.GOOD_STATUS_SINGLES, ...PokeViability.GOOD_STATUS_DOUBLES]);
+      const sample = [...slot.movePool.filter(n => utilityNames.has(n)),
+        ...shuffled(slot.movePool.filter(n => !utilityNames.has(n) && !PokeViability.BAD_ATTACKS.has(n))).slice(0, MOVE_SAMPLE)];
+      const moveData = {};
+      await Promise.all(sample.map(async n => { const mi = await PokeApi.getMoveInfo(n); if (mi) moveData[n] = mi; }));
+      const picked = PokeViability.pickRandomMoves(sample, moveData, { types: eraTypes(slot), stats: slot.stats }, { doubles: !!t.format.doubles, gen: era });
+      slot.moves = [0, 1, 2, 3].map(j => picked.moves[j] || null);
+
+      // Item: none in Gen 1, unique across the team (Item Clause), not introduced after the format's generation,
+      // and one that does something for this Pokémon and its moves (no plates without matching moves, etc.)
       slot.item = null;
-      const itemChoices = itemCache.filter(i => !specialistItems.has(i) && !megaStones.has(i));
-      if (itemChoices.length && (era === null || era >= 2)) {
-        for (let attempt = 0; attempt < 8; attempt++) {
-          const item = pick(itemChoices);
-          if (usedItems.has(item)) continue;
+      if (era === null || era >= 2) {
+        const info = speciesLookup ? speciesLookup(name) : null;
+        const types = eraTypes(slot);
+        const fitCtx = { moveInfo: moveData, gen: era, weakTo: (type) => PokeLogic.getDefensiveMultiplier(types, type, era || undefined) >= 2 };
+        const fitting = shuffled(itemCache.filter(i => !specialistItems.has(i) && !megaStones.has(i) && !usedItems.has(i)
+          && PokeViability.suitsRandomSet(i, slot, fitCtx, info)));
+        for (const item of fitting.slice(0, 8)) {
           const gen = era === null ? null : await PokeApi.getItemGeneration(item);
           if (gen && gen > era) continue;
           slot.item = item;
           break;
         }
       }
-      const mix = shuffled(slot.movePool);
-      slot.moves = [0, 1, 2, 3].map(j => mix[j] || null);
-      slot.nature = pick(Object.keys(NATURES));
-      STAT_KEYS.forEach(k => { slot.ivs[k] = 31; });
-      let remaining = MAX_EV_TOTAL;
-      for (const k of shuffled(STAT_KEYS).slice(0, 3)) {
-        const ev = Math.min(MAX_EV_STAT, remaining, 252);
-        slot.evs[k] = ev - (ev % 4);
-        remaining -= slot.evs[k];
-      }
+      // EVs and nature that match the attacks: fast Pokémon max attack and Speed, slower ones HP and attack
+      const spread = PokeViability.randomSpread(picked.category, slot.stats);
+      slot.nature = spread.nature;
+      STAT_KEYS.forEach(k => { slot.ivs[k] = 31; slot.evs[k] = spread.evs[k] || 0; });
 
       // Keep the set only if it passes the same rule checks the builder shows
       const facts = { itemList: new Set(itemCache), megaStones, itemGen: {}, abilityGen: {} };
@@ -709,7 +730,7 @@ async function generateRandomTeam() {
   const source = format.id === "any" ? "all Pokémon" : label;
   setStatus(generated.length < 6
     ? `Only ${generated.length} Pokémon from ${source} could be generated (network errors or too few with ${format.id === "any" ? "move data" : "learnsets in this format"}). Undo restores your previous team.`
-    : `Random team drawn from ${source}. Each set passed the rule checks below; sets are random, not tuned for strength.`);
+    : `Random team drawn from ${source}. Each set passed the rule checks below. Moves, items, EVs and natures follow simple competitive rules, but the team itself is random, so analyze it before relying on it.`);
 }
 document.getElementById("randomTeamBtn").addEventListener("click", generateRandomTeam);
 
@@ -870,20 +891,27 @@ function loadSnapshot(id) {
 
 const SNAPSHOT_LABELS = { gen9doublesou: "Gen 9 Doubles OU" };
 async function computeThreats(members) {
-  if (!PokeThreats || !PokeDamage.available) return { error: "The damage calculator did not load, so threats were not analyzed." };
-  const id = PokeThreats.snapshotFor(currentFormat(), isDoubles());
+  try { await CalcLoader.ensure(); } catch (err) { /* reported below */ }
+  if (!window.PokeThreats || !CalcLoader.ready()) return { error: "The damage calculator did not load, so threats were not analyzed." };
+  const id = window.PokeThreats.snapshotFor(currentFormat(), isDoubles());
   if (!id) return { error: "Doubles usage data is only available for Generation 9, so threats were not analyzed for this format." };
   const label = SNAPSHOT_LABELS[id] || id.replace(/^gen(\d)ou$/, "Gen $1 OU");
   try {
     const snapshot = await loadSnapshot(id);
     const started = performance.now();
-    const result = PokeThreats.analyzeThreats(currentFormat().era || 9, snapshot, members, { doubles: isDoubles() });
+    const result = window.PokeThreats.analyzeThreats(currentFormat().era || 9, snapshot, members, { doubles: isDoubles() });
     appPerf.lastThreatAnalysisMs = Math.round(performance.now() - started);
     return { result, snapshot, label };
   } catch (err) {
     console.error(err);
     return { error: `Could not load ${label} usage data, so threats were not analyzed.` };
   }
+}
+// The format's singles usage snapshot, used as viability's reference strength even when the threat
+// list itself can't run (e.g. Doubles in an older generation)
+async function loadViabilitySnapshot() {
+  const id = window.PokeThreats ? window.PokeThreats.snapshotFor(currentFormat(), false) : null;
+  try { return id ? await loadSnapshot(id) : null; } catch (err) { return null; }
 }
 const isDoubles = () => !!(team && team.format.doubles);
 
@@ -907,8 +935,18 @@ document.getElementById("analyzeBtn").addEventListener("click", async () => {
     const threats = await computeThreats(filled);
     if (team !== t) return;
     // The threat-matchup score component needs the threat results; without usage data it is left out
-    const threat = threats.result ? PokeThreats.threatScore(threats.result, threats.snapshot) : null;
-    const result = PokeAnalysis.analyzeTeam(filled, PokeApi.cachedMoveInfo(), { validation: lastValidation, doubles: isDoubles(), threat });
+    const threat = threats.result ? window.PokeThreats.threatScore(threats.result, threats.snapshot) : null;
+    // Type analysis uses the format's generation chart and each Pokémon's types in that generation
+    const members = filled.map(s => ({ ...s, types: eraTypes(s) }));
+    // Viability compares each Pokémon with the format's most-used ones (species data from the calculator)
+    const genNum = currentFormat().era || 9;
+    const D = window.PokeDamage && window.PokeDamage.available ? window.PokeDamage : null;
+    const refSnapshot = threats.snapshot || await loadViabilitySnapshot();
+    const refBst = refSnapshot && window.PokeThreats ? window.PokeThreats.referenceBst(genNum, refSnapshot) : null;
+    const result = PokeAnalysis.analyzeTeam(members, PokeApi.cachedMoveInfo(), {
+      validation: lastValidation, doubles: isDoubles(), threat, gen: currentFormat().era,
+      refBst, speciesInfo: D ? (name) => D.speciesInfo(genNum, name) : null
+    });
     if (threats.result) {
       const s = threats.result.summary;
       const top = threats.result.entries.filter(e => e.level === "high").slice(0, 3).map(e => e.name);

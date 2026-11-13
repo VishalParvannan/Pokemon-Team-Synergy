@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pokémon Team Synergy Analyzer</title>
+  <meta name="description" content="Build a Pokémon team, check it against a format's rules and learnsets, run Showdown-accurate damage calculations, and see how it handles the most-used threats." />
   <link rel="icon" href="data:," />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -11,42 +12,52 @@
 </head>
 <body>
   <a class="skip-link" href="#teamTabs">Skip to team builder</a>
-  <div class="wrap">
-    <header>
-      <div class="lens" aria-hidden="true"></div>
-      <h1>Team Synergy<br/>Analyzer</h1>
-      <nav class="top-nav" aria-label="Pages"><a href="stats.html">Saved teams</a></nav>
+  <main class="wrap">
+    <header class="site-header">
+      <div class="brand">
+        <div class="lens" aria-hidden="true"></div>
+        <h1>Team Synergy Analyzer</h1>
+      </div>
+      <nav class="top-nav" aria-label="Pages"><a href="stats.html">Saved teams →</a></nav>
     </header>
-    <p class="subtitle">Build a team, pick a format, and check it against that format's species list and learnsets before analyzing type synergy, roles and speed. Results are heuristics, not a competitive rating.</p>
+    <p class="subtitle">Build a team for a chosen generation and format, check it against that format's rules, then see how it holds up competitively: type synergy, roles, speed, viability and the most-used threats.</p>
 
-    <!-- Team management -->
-    <div class="team-bar" role="group" aria-label="Saved teams">
-      <label class="selector-label" for="teamSelect">Team</label>
-      <select id="teamSelect" class="ev-input format-select"></select>
-      <button type="button" id="newTeamBtn" class="small-button">New</button>
-      <button type="button" id="dupTeamBtn" class="small-button">Duplicate</button>
-      <button type="button" id="renameTeamBtn" class="small-button">Rename</button>
-      <button type="button" id="deleteTeamBtn" class="small-button danger">Delete</button>
-      <button type="button" id="ioBtn" class="small-button">Import / Export</button>
-      <button type="button" id="shareBtn" class="small-button">Copy share link</button>
-    </div>
-
-    <!-- Format -->
-    <div class="format-row">
-      <label class="selector-label" for="formatSelect">Format</label>
-      <select id="formatSelect" class="ev-input format-select"></select>
-      <label class="selector-label" for="battleStyle">Battle style</label>
-      <select id="battleStyle" class="ev-input format-select narrow">
-        <option value="singles">Singles</option>
-        <option value="doubles">Doubles</option>
-      </select>
-      <label class="format-option" id="introducedOnlyLabel" hidden>
-        <input type="checkbox" id="introducedOnly" /> Only Pokémon introduced in this generation
-      </label>
+    <!-- Team and format settings -->
+    <section class="settings-panel" aria-label="Team and format">
+      <div class="settings-row">
+        <div class="setting">
+          <label class="selector-label" for="teamSelect">Team</label>
+          <select id="teamSelect" class="ev-input format-select"></select>
+        </div>
+        <div class="button-group" role="group" aria-label="Manage teams">
+          <button type="button" id="newTeamBtn" class="small-button">New</button>
+          <button type="button" id="dupTeamBtn" class="small-button">Duplicate</button>
+          <button type="button" id="renameTeamBtn" class="small-button">Rename</button>
+          <button type="button" id="deleteTeamBtn" class="small-button danger">Delete</button>
+        </div>
+        <div class="button-group push-right" role="group" aria-label="Share">
+          <button type="button" id="ioBtn" class="small-button">Import / Export</button>
+          <button type="button" id="shareBtn" class="small-button">Copy share link</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div class="setting">
+          <label class="selector-label" for="formatSelect">Format</label>
+          <select id="formatSelect" class="ev-input format-select"></select>
+        </div>
+        <div class="setting">
+          <label class="selector-label" for="battleStyle">Battle style</label>
+          <select id="battleStyle" class="ev-input format-select narrow">
+            <option value="singles">Singles</option>
+            <option value="doubles">Doubles</option>
+          </select>
+        </div>
+        <label class="format-option" id="introducedOnlyLabel" hidden>
+          <input type="checkbox" id="introducedOnly" /> Only Pokémon introduced in this generation
+        </label>
+      </div>
       <p class="format-note" id="formatNote"></p>
-    </div>
-
-    <div id="statusMessage" class="status-message" role="status" aria-live="polite"></div>
+    </section>
 
     <div class="controls-row">
       <button type="button" id="randomTeamBtn" class="submit-button secondary">🎲 Random Team</button>
@@ -54,6 +65,7 @@
       <button type="button" id="undoBtn" class="submit-button secondary muted" hidden>Undo</button>
       <span id="slotCounter" class="slot-counter">0/6 slots filled</span>
     </div>
+    <div id="statusMessage" class="status-message" role="status" aria-live="polite"></div>
 
     <div class="builder-container">
       <div class="team-tabs" id="teamTabs" role="tablist" aria-label="Team slots" tabindex="-1"></div>
@@ -71,17 +83,9 @@
       </details>
     </section>
 
-    <!-- Damage calculator -->
-    <section class="damage-panel" aria-labelledby="damageTitle">
-      <h2 id="damageTitle">Damage calculator</h2>
-      <p class="sub-text">Uses your sets' level, nature, EVs, IVs, ability and item, with the format's generation mechanics. Powered by <a href="https://github.com/smogon/damage-calc" rel="noopener">@smogon/calc</a>, the engine behind Pokémon Showdown's calculator.</p>
-      <div id="damageControls" class="damage-controls"></div>
-      <div id="damageResult" class="damage-result" role="status" aria-live="polite"></div>
-    </section>
-
     <div class="analyze-row">
-      <button type="button" id="analyzeBtn" class="submit-button">
-        <img src="../Images/pokeball.png" alt="" style="width: 18px; height: 18px; object-fit: contain;" />
+      <button type="button" id="analyzeBtn" class="submit-button analyze-button">
+        <img src="../Images/pokeball.png" alt="" width="18" height="18" />
         Analyze Team Synergy
       </button>
     </div>
@@ -114,6 +118,11 @@
           <div class="type-pill-grid" id="coveredTypesGrid"></div>
           <p class="sub-text" style="margin-top: 12px;">Not hit super-effectively:</p>
           <div class="type-pill-grid" id="uncoveredTypesGrid"></div>
+        </div>
+        <div class="report-card wide">
+          <h3>Competitive viability</h3>
+          <p class="sub-text" id="viabilityIntro"></p>
+          <ul class="stat-list" id="viabilityList"></ul>
         </div>
         <div class="report-card">
           <h3>Shared weaknesses and switch-ins</h3>
@@ -155,11 +164,19 @@
       </div>
     </section>
 
+    <!-- Damage calculator -->
+    <section class="damage-panel" aria-labelledby="damageTitle">
+      <h2 id="damageTitle">Damage calculator</h2>
+      <p class="sub-text">Uses your sets' level, nature, EVs, IVs, ability and item, with the format's generation mechanics. Powered by <a href="https://github.com/smogon/damage-calc" rel="noopener">@smogon/calc</a>, the engine behind Pokémon Showdown's calculator.</p>
+      <div id="damageControls" class="damage-controls"></div>
+      <div id="damageResult" class="damage-result" role="status" aria-live="polite"></div>
+    </section>
+
     <footer class="site-footer">
       <span>Data from <a href="https://pokeapi.co/" rel="noopener">PokeAPI</a>, cached in this browser for up to 7 days.</span>
       <button type="button" id="clearCacheBtn" class="link-button">Clear cached data</button>
     </footer>
-  </div>
+  </main>
 
   <dialog id="ioDialog" aria-labelledby="ioTitle">
     <h2 id="ioTitle">Import / Export</h2>
@@ -179,13 +196,13 @@
   <script src="logic.js"></script>
   <script src="formats.js"></script>
   <script src="team.js"></script>
+  <script src="viability.js"></script>
   <script src="analysis.js"></script>
   <script src="cache.js"></script>
   <script src="api.js"></script>
-  <script src="vendor/smogon-calc/data.min.js"></script>
-  <script src="vendor/smogon-calc/calc.min.js"></script>
   <script src="damage.js"></script>
   <script src="threats.js"></script>
+  <script src="calc-loader.js"></script>
   <script src="controls.js"></script>
   <script src="damage-panel.js"></script>
   <script src="report.js"></script>

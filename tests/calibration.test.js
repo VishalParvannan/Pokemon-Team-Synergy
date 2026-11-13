@@ -63,7 +63,7 @@ test("score: threat component is included only with threat data, weights renorma
   const s = T.createEmptySlot();
   Object.assign(s, { name: "a", types: ["normal"], moves: ["tackle", null, null, null] });
   const info = { tackle: { type: "normal", damageClass: "physical", priority: 0 } };
-  const w = { offense: 20, defense: 20, roles: 20, completeness: 15, threats: 25 };
+  const w = { offense: 20, defense: 20, roles: 20, completeness: 15, threats: 25, viability: 0 };
   const without = A.analyzeTeam([s], info, { weights: w }).score;
   assert.ok(!without.components.some(c => c.id === "threats"));
   assert.equal(without.components.reduce((a, c) => a + c.weight, 0), 100);

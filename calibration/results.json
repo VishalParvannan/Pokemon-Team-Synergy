@@ -88,42 +88,63 @@
   },
   "method": {
     "experts": "Smogon sample teams (pkmn/smogon)",
-    "baseline": "random teams of 6 distinct species drawn by usage from each format's 120 most-used Pokémon, each with its most common set (8 per expert team, min 80 per format)",
-    "split": "70/30 train/test per format, seed 20261113",
-    "metric": "AUC = probability an expert team outscores a baseline team; 95% CI by bootstrap (1000 resamples)",
-    "tuning": "grid over offense/defense/roles/threat-matchup weights in steps of 5 with completeness fixed at 15 (complete teams cannot calibrate it); then among weights within 0.01 of the best training AUC the most evenly spread is chosen (rule fixed before viewing test results)",
+    "popularBaseline": "random teams of 6 distinct species drawn by usage from each format's 120 most-used Pokémon, each with its most common set (8 per expert team, min 80 per format)",
+    "randomBaseline": "random teams: any species of the generation (battle-only forms excluded), random item, ability and nature, four random moves (no learnset check), random 252/252/4 EVs (4 per expert team, min 40 per format)",
+    "split": "70/30 train/test per format and team kind, seed 20261113",
+    "metric": "AUC = probability an expert team outscores a baseline team, reported against each baseline; 95% CI by bootstrap (1000 resamples)",
+    "tuning": "grid over offense/defense/roles/threat-matchup/viability weights in steps of 5 with completeness fixed at 15; objective = mean of the two training AUCs; among weights within 0.01 of the best objective the most evenly spread is chosen (rule fixed before viewing test results)",
     "threats": "threat-matchup component uses the 20 most-used Pokémon of the format (Gen 9 Doubles OU for doubles) with their most common sets"
   },
   "groups": {
     "singles": {
-      "expertTeams": 207,
-      "baselineTeams": 1682,
-      "skippedExpertTeams": 4,
+      "teams": {
+        "expert": 207,
+        "popular": 1680,
+        "random": 844,
+        "skippedExpert": 4
+      },
       "perComponent": {
         "offense": {
-          "auc": 0.537,
-          "meanExpert": 90.9,
-          "meanBaseline": 90.1
+          "vsPopular": 0.538,
+          "vsRandom": 0.689,
+          "meanExpert": 91.8,
+          "meanPopular": 91.3,
+          "meanRandom": 87.1
         },
         "defense": {
-          "auc": 0.662,
-          "meanExpert": 59.2,
-          "meanBaseline": 47.5
+          "vsPopular": 0.682,
+          "vsRandom": 0.818,
+          "meanExpert": 65.6,
+          "meanPopular": 53.6,
+          "meanRandom": 41.3
         },
         "roles": {
-          "auc": 0.497,
+          "vsPopular": 0.491,
+          "vsRandom": 0.931,
           "meanExpert": 76.3,
-          "meanBaseline": 76.4
+          "meanPopular": 76.7,
+          "meanRandom": 46.6
         },
         "completeness": {
-          "auc": 0.493,
+          "vsPopular": 0.494,
+          "vsRandom": 0.492,
           "meanExpert": 97.6,
-          "meanBaseline": 97.6
+          "meanPopular": 97.6,
+          "meanRandom": 97.6
         },
         "threats": {
-          "auc": 0.576,
+          "vsPopular": 0.582,
+          "vsRandom": 0.946,
           "meanExpert": 87.2,
-          "meanBaseline": 84.5
+          "meanPopular": 84.3,
+          "meanRandom": 63.4
+        },
+        "viability": {
+          "vsPopular": 0.452,
+          "vsRandom": 1,
+          "meanExpert": 91.3,
+          "meanPopular": 92.3,
+          "meanRandom": 52.2
         }
       },
       "originalWeights": {
@@ -131,191 +152,296 @@
         "defense": 30,
         "roles": 25,
         "completeness": 15,
-        "threats": 0
+        "threats": 0,
+        "viability": 0
       },
-      "bestFitWeights": {
-        "offense": 0,
-        "defense": 35,
-        "roles": 0,
-        "completeness": 15,
-        "threats": 50
-      },
-      "chosenWeights": {
-        "offense": 25,
+      "previousWeights": {
+        "offense": 30,
         "defense": 30,
         "roles": 0,
         "completeness": 15,
-        "threats": 30
+        "threats": 25,
+        "viability": 0
+      },
+      "bestFitWeights": {
+        "offense": 10,
+        "defense": 25,
+        "roles": 0,
+        "threats": 30,
+        "viability": 20,
+        "completeness": 15
+      },
+      "chosenWeights": {
+        "offense": 20,
+        "defense": 20,
+        "roles": 5,
+        "threats": 20,
+        "viability": 20,
+        "completeness": 15
       },
       "original": {
-        "all": {
-          "auc": 0.611,
-          "ci95": [
-            0.569,
-            0.653
-          ],
-          "meanExpert": 78.7,
-          "meanBaseline": 75,
-          "experts": 207,
-          "baselines": 1682
-        },
-        "train": {
-          "auc": 0.62,
-          "ci95": [
-            0.57,
-            0.667
-          ],
-          "meanExpert": 79.1,
-          "meanBaseline": 75.1,
-          "experts": 145,
-          "baselines": 1178
-        },
         "test": {
-          "auc": 0.591,
-          "ci95": [
-            0.509,
-            0.673
+          "vsPopular": 0.607,
+          "vsPopularCi95": [
+            0.529,
+            0.682
           ],
-          "meanExpert": 77.9,
-          "meanBaseline": 74.9,
-          "experts": 62,
-          "baselines": 504
+          "vsRandom": 0.905,
+          "vsRandomCi95": [
+            0.86,
+            0.947
+          ],
+          "meanExpert": 80.2,
+          "meanPopular": 77.5,
+          "meanRandom": 64.6,
+          "counts": {
+            "expert": 62,
+            "popular": 503,
+            "random": 254
+          }
+        }
+      },
+      "previous": {
+        "test": {
+          "vsPopular": 0.668,
+          "vsPopularCi95": [
+            0.592,
+            0.737
+          ],
+          "vsRandom": 0.926,
+          "vsRandomCi95": [
+            0.897,
+            0.956
+          ],
+          "meanExpert": 83,
+          "meanPopular": 79.3,
+          "meanRandom": 69.2,
+          "counts": {
+            "expert": 62,
+            "popular": 503,
+            "random": 254
+          }
         }
       },
       "bestFit": {
         "train": {
-          "auc": 0.695,
-          "ci95": [
-            0.648,
-            0.735
+          "vsPopular": 0.708,
+          "vsPopularCi95": [
+            0.666,
+            0.752
           ],
-          "meanExpert": 79.5,
-          "meanBaseline": 73.6,
-          "experts": 145,
-          "baselines": 1178
+          "vsRandom": 0.993,
+          "vsRandomCi95": [
+            0.988,
+            0.996
+          ],
+          "meanExpert": 84.9,
+          "meanPopular": 80.9,
+          "meanRandom": 63,
+          "counts": {
+            "expert": 145,
+            "popular": 1177,
+            "random": 590
+          }
         },
         "test": {
-          "auc": 0.631,
-          "ci95": [
-            0.56,
-            0.704
+          "vsPopular": 0.666,
+          "vsPopularCi95": [
+            0.594,
+            0.732
           ],
-          "meanExpert": 77.6,
-          "meanBaseline": 73.4,
-          "experts": 62,
-          "baselines": 504
+          "vsRandom": 0.992,
+          "vsRandomCi95": [
+            0.985,
+            0.997
+          ],
+          "meanExpert": 84.1,
+          "meanPopular": 81.1,
+          "meanRandom": 63.4,
+          "counts": {
+            "expert": 62,
+            "popular": 503,
+            "random": 254
+          }
         }
       },
       "chosen": {
         "train": {
-          "auc": 0.685,
-          "ci95": [
-            0.639,
-            0.728
+          "vsPopular": 0.689,
+          "vsPopularCi95": [
+            0.642,
+            0.738
           ],
-          "meanExpert": 81.7,
-          "meanBaseline": 76.8,
-          "experts": 145,
-          "baselines": 1178
+          "vsRandom": 0.996,
+          "vsRandomCi95": [
+            0.993,
+            0.998
+          ],
+          "meanExpert": 85.8,
+          "meanPopular": 82.7,
+          "meanRandom": 65.7,
+          "counts": {
+            "expert": 145,
+            "popular": 1177,
+            "random": 590
+          }
         },
         "test": {
-          "auc": 0.633,
-          "ci95": [
-            0.553,
-            0.703
+          "vsPopular": 0.648,
+          "vsPopularCi95": [
+            0.571,
+            0.714
           ],
-          "meanExpert": 80.3,
-          "meanBaseline": 76.7,
-          "experts": 62,
-          "baselines": 504
+          "vsRandom": 0.995,
+          "vsRandomCi95": [
+            0.989,
+            0.998
+          ],
+          "meanExpert": 85.2,
+          "meanPopular": 82.9,
+          "meanRandom": 65.9,
+          "counts": {
+            "expert": 62,
+            "popular": 503,
+            "random": 254
+          }
+        },
+        "all": {
+          "vsPopular": 0.677,
+          "vsPopularCi95": [
+            0.638,
+            0.713
+          ],
+          "vsRandom": 0.995,
+          "vsRandomCi95": [
+            0.993,
+            0.997
+          ],
+          "meanExpert": 85.6,
+          "meanPopular": 82.8,
+          "meanRandom": 65.8,
+          "counts": {
+            "expert": 207,
+            "popular": 1680,
+            "random": 844
+          }
         }
       },
       "perFormat": {
         "gen9ou": {
-          "original": 0.65,
-          "bestFit": 0.812,
-          "chosen": 0.797,
+          "previousVsPopular": 0.789,
+          "chosenVsPopular": 0.77,
+          "previousVsRandom": 0.924,
+          "chosenVsRandom": 0.995,
           "experts": 21
         },
         "gen8ou": {
-          "original": 0.66,
-          "bestFit": 0.689,
-          "chosen": 0.725,
+          "previousVsPopular": 0.75,
+          "chosenVsPopular": 0.725,
+          "previousVsRandom": 0.962,
+          "chosenVsRandom": 0.999,
           "experts": 22
         },
         "gen7ou": {
-          "original": 0.654,
-          "bestFit": 0.694,
-          "chosen": 0.72,
+          "previousVsPopular": 0.761,
+          "chosenVsPopular": 0.732,
+          "previousVsRandom": 0.963,
+          "chosenVsRandom": 0.999,
           "experts": 24
         },
         "gen6ou": {
-          "original": 0.823,
-          "bestFit": 0.722,
-          "chosen": 0.761,
+          "previousVsPopular": 0.808,
+          "chosenVsPopular": 0.791,
+          "previousVsRandom": 0.954,
+          "chosenVsRandom": 0.996,
           "experts": 31
         },
         "gen5ou": {
-          "original": 0.692,
-          "bestFit": 0.661,
-          "chosen": 0.684,
+          "previousVsPopular": 0.662,
+          "chosenVsPopular": 0.68,
+          "previousVsRandom": 0.952,
+          "chosenVsRandom": 0.999,
           "experts": 16
         },
         "gen4ou": {
-          "original": 0.597,
-          "bestFit": 0.803,
-          "chosen": 0.783,
+          "previousVsPopular": 0.795,
+          "chosenVsPopular": 0.773,
+          "previousVsRandom": 0.994,
+          "chosenVsRandom": 1,
           "experts": 13
         },
         "gen3ou": {
-          "original": 0.609,
-          "bestFit": 0.733,
-          "chosen": 0.707,
+          "previousVsPopular": 0.677,
+          "chosenVsPopular": 0.636,
+          "previousVsRandom": 0.973,
+          "chosenVsRandom": 0.999,
           "experts": 33
         },
         "gen2ou": {
-          "original": 0.659,
-          "bestFit": 0.526,
-          "chosen": 0.55,
+          "previousVsPopular": 0.53,
+          "chosenVsPopular": 0.574,
+          "previousVsRandom": 0.861,
+          "chosenVsRandom": 0.999,
           "experts": 19
         },
         "gen1ou": {
-          "original": 0.607,
-          "bestFit": 0.636,
-          "chosen": 0.621,
+          "previousVsPopular": 0.564,
+          "chosenVsPopular": 0.555,
+          "previousVsRandom": 0.935,
+          "chosenVsRandom": 1,
           "experts": 28
         }
       }
     },
     "doubles": {
-      "expertTeams": 33,
-      "baselineTeams": 312,
-      "skippedExpertTeams": 0,
+      "teams": {
+        "expert": 33,
+        "popular": 312,
+        "random": 156,
+        "skippedExpert": 0
+      },
       "perComponent": {
         "offense": {
-          "auc": 0.442,
+          "vsPopular": 0.438,
+          "vsRandom": 0.442,
           "meanExpert": 89.3,
-          "meanBaseline": 90.7
+          "meanPopular": 90.6,
+          "meanRandom": 90.5
         },
         "defense": {
-          "auc": 0.6,
+          "vsPopular": 0.603,
+          "vsRandom": 0.58,
           "meanExpert": 45.6,
-          "meanBaseline": 38.7
+          "meanPopular": 38.5,
+          "meanRandom": 39.1
         },
         "roles": {
-          "auc": 0.525,
+          "vsPopular": 0.51,
+          "vsRandom": 0.991,
           "meanExpert": 79.7,
-          "meanBaseline": 78.7
+          "meanPopular": 79.3,
+          "meanRandom": 38.2
         },
         "completeness": {
-          "auc": 0.455,
+          "vsPopular": 0.455,
+          "vsRandom": 0.455,
           "meanExpert": 99.7,
-          "meanBaseline": 100
+          "meanPopular": 100,
+          "meanRandom": 100
         },
         "threats": {
-          "auc": 0.77,
+          "vsPopular": 0.772,
+          "vsRandom": 0.991,
           "meanExpert": 92.5,
-          "meanBaseline": 86.1
+          "meanPopular": 85.6,
+          "meanRandom": 61.8
+        },
+        "viability": {
+          "vsPopular": 0.626,
+          "vsRandom": 1,
+          "meanExpert": 93.8,
+          "meanPopular": 92.8,
+          "meanRandom": 57.4
         }
       },
       "originalWeights": {
@@ -323,122 +449,201 @@
         "defense": 30,
         "roles": 25,
         "completeness": 15,
-        "threats": 0
+        "threats": 0,
+        "viability": 0
       },
-      "bestFitWeights": {
-        "offense": 0,
-        "defense": 5,
-        "roles": 5,
-        "completeness": 15,
-        "threats": 75
-      },
-      "chosenWeights": {
+      "previousWeights": {
         "offense": 5,
         "defense": 10,
         "roles": 5,
         "completeness": 15,
-        "threats": 65
+        "threats": 65,
+        "viability": 0
+      },
+      "bestFitWeights": {
+        "offense": 0,
+        "defense": 5,
+        "roles": 0,
+        "threats": 45,
+        "viability": 35,
+        "completeness": 15
+      },
+      "chosenWeights": {
+        "offense": 0,
+        "defense": 5,
+        "roles": 5,
+        "threats": 40,
+        "viability": 35,
+        "completeness": 15
       },
       "original": {
-        "all": {
-          "auc": 0.552,
-          "ci95": [
-            0.447,
-            0.658
-          ],
-          "meanExpert": 75.4,
-          "meanBaseline": 73.5,
-          "experts": 33,
-          "baselines": 312
-        },
-        "train": {
-          "auc": 0.574,
-          "ci95": [
-            0.463,
-            0.69
-          ],
-          "meanExpert": 75.7,
-          "meanBaseline": 73.1,
-          "experts": 23,
-          "baselines": 218
-        },
         "test": {
-          "auc": 0.503,
-          "ci95": [
-            0.306,
-            0.699
+          "vsPopular": 0.572,
+          "vsPopularCi95": [
+            0.377,
+            0.754
           ],
-          "meanExpert": 74.6,
-          "meanBaseline": 74.5,
-          "experts": 10,
-          "baselines": 94
+          "vsRandom": 0.919,
+          "vsRandomCi95": [
+            0.834,
+            0.981
+          ],
+          "meanExpert": 75.9,
+          "meanPopular": 74.3,
+          "meanRandom": 61.8,
+          "counts": {
+            "expert": 10,
+            "popular": 94,
+            "random": 47
+          }
+        }
+      },
+      "previous": {
+        "test": {
+          "vsPopular": 0.776,
+          "vsPopularCi95": [
+            0.612,
+            0.915
+          ],
+          "vsRandom": 0.991,
+          "vsRandomCi95": [
+            0.968,
+            1
+          ],
+          "meanExpert": 88.6,
+          "meanPopular": 83.2,
+          "meanRandom": 64.9,
+          "counts": {
+            "expert": 10,
+            "popular": 94,
+            "random": 47
+          }
         }
       },
       "bestFit": {
         "train": {
-          "auc": 0.791,
-          "ci95": [
-            0.696,
-            0.879
+          "vsPopular": 0.792,
+          "vsPopularCi95": [
+            0.697,
+            0.874
           ],
-          "meanExpert": 90.8,
-          "meanBaseline": 85.3,
-          "experts": 23,
-          "baselines": 218
+          "vsRandom": 1,
+          "vsRandomCi95": [
+            1,
+            1
+          ],
+          "meanExpert": 91.7,
+          "meanPopular": 87.9,
+          "meanRandom": 65.1,
+          "counts": {
+            "expert": 23,
+            "popular": 218,
+            "random": 109
+          }
         },
         "test": {
-          "auc": 0.734,
-          "ci95": [
-            0.591,
-            0.869
+          "vsPopular": 0.78,
+          "vsPopularCi95": [
+            0.592,
+            0.932
           ],
-          "meanExpert": 90.2,
-          "meanBaseline": 85.8,
-          "experts": 10,
-          "baselines": 94
+          "vsRandom": 1,
+          "vsRandomCi95": [
+            1,
+            1
+          ],
+          "meanExpert": 91.6,
+          "meanPopular": 88,
+          "meanRandom": 64.3,
+          "counts": {
+            "expert": 10,
+            "popular": 94,
+            "random": 47
+          }
         }
       },
       "chosen": {
         "train": {
-          "auc": 0.783,
-          "ci95": [
-            0.68,
-            0.872
+          "vsPopular": 0.777,
+          "vsPopularCi95": [
+            0.671,
+            0.865
           ],
-          "meanExpert": 88.3,
-          "meanBaseline": 83.1,
-          "experts": 23,
-          "baselines": 218
+          "vsRandom": 1,
+          "vsRandomCi95": [
+            1,
+            1
+          ],
+          "meanExpert": 91.1,
+          "meanPopular": 87.5,
+          "meanRandom": 63.9,
+          "counts": {
+            "expert": 23,
+            "popular": 218,
+            "random": 109
+          }
         },
         "test": {
-          "auc": 0.685,
-          "ci95": [
-            0.516,
-            0.839
+          "vsPopular": 0.775,
+          "vsPopularCi95": [
+            0.58,
+            0.93
           ],
-          "meanExpert": 87.6,
-          "meanBaseline": 83.8,
-          "experts": 10,
-          "baselines": 94
+          "vsRandom": 1,
+          "vsRandomCi95": [
+            1,
+            1
+          ],
+          "meanExpert": 90.9,
+          "meanPopular": 87.8,
+          "meanRandom": 63.1,
+          "counts": {
+            "expert": 10,
+            "popular": 94,
+            "random": 47
+          }
+        },
+        "all": {
+          "vsPopular": 0.773,
+          "vsPopularCi95": [
+            0.685,
+            0.854
+          ],
+          "vsRandom": 0.999,
+          "vsRandomCi95": [
+            0.998,
+            1
+          ],
+          "meanExpert": 91,
+          "meanPopular": 87.6,
+          "meanRandom": 63.7,
+          "counts": {
+            "expert": 33,
+            "popular": 312,
+            "random": 156
+          }
         }
       },
       "perFormat": {
         "gen9doublesou": {
-          "original": 0.702,
-          "bestFit": 0.916,
-          "chosen": 0.898,
+          "previousVsPopular": 0.898,
+          "chosenVsPopular": 0.928,
+          "previousVsRandom": 0.994,
+          "chosenVsRandom": 1,
           "experts": 8
         },
         "gen9vgc2024regg": {
-          "original": 0.538,
-          "bestFit": 0.72,
-          "chosen": 0.714,
+          "previousVsPopular": 0.721,
+          "chosenVsPopular": 0.723,
+          "previousVsRandom": 0.992,
+          "chosenVsRandom": 0.999,
           "experts": 19
         },
         "gen9vgc2025regi": {
-          "original": 0.498,
-          "bestFit": 0.713,
-          "chosen": 0.676,
+          "previousVsPopular": 0.711,
+          "chosenVsPopular": 0.771,
+          "previousVsRandom": 0.979,
+          "chosenVsRandom": 1,
           "experts": 6
         }
       }

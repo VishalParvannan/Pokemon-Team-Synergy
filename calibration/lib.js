@@ -63,7 +63,7 @@ function toMember(calc, gen, set, moveInfo) {
     const data = gen.moves.get(toID(name));
     if (!data) { moveInfo[id] = null; return; }
     const m = new calc.Move(gen, data.name);
-    moveInfo[id] = { type: m.type.toLowerCase(), damageClass: m.category.toLowerCase(), priority: m.priority || 0, target: TARGETS[data.target] || "selected-pokemon" };
+    moveInfo[id] = { type: m.type.toLowerCase(), damageClass: m.category.toLowerCase(), priority: m.priority || 0, power: m.bp || 0, target: TARGETS[data.target] || "selected-pokemon" };
   });
   return slot;
 }
@@ -83,12 +83,55 @@ function baselineTeam(pool, rand) {
   return chosen.map(p => ({ species: p.name, ...p.set }));
 }
 
-// AUC: probability that a random positive outscores a random negative (ties count half)
+// "Random" baseline: any species of the generation (battle-only forms excluded), random item,
+// random ability, four random moves (calc data has no learnsets, so moves may be unlearnable) and a
+// random 252/252/4 EV spread. Represents an unoptimized team, the case the viability check targets.
+const BATTLE_ONLY = /-(mega|primal|gmax|eternamax|zen|terastal|stellar|ultra|crowned|blade|school|pirouette|noice|hangry|busted|gulping|gorging|complete|hero|totem)(-|$)/;
+const NATURE_NAMES = ["Hardy", "Adamant", "Modest", "Jolly", "Timid", "Bold", "Calm", "Impish", "Careful", "Brave", "Quiet", "Relaxed", "Sassy", "Naive", "Hasty", "Lonely", "Mild", "Rash", "Gentle", "Lax", "Docile", "Serious", "Bashful", "Quirky", "Naughty"];
+const listCache = new Map();
+function genLists(gen) {
+  if (!listCache.has(gen.num)) {
+    const species = [...gen.species].filter(s => !BATTLE_ONLY.test(T.normalizeId(s.name)));
+    const items = [...gen.items].map(i => i.name);
+    const moves = [...gen.moves].filter(m => !m.isZ && !m.isMax && m.name !== "Struggle" && m.name !== "(No Move)").map(m => m.name);
+    listCache.set(gen.num, { species, items, moves });
+  }
+  return listCache.get(gen.num);
+}
+function randomTeam(gen, rand) {
+  const { species, items, moves } = genLists(gen);
+  const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+  const chosen = new Set();
+  while (chosen.size < 6) chosen.add(pick(species));
+  return [...chosen].map(s => {
+    const mv = new Set();
+    while (mv.size < 4) mv.add(pick(moves));
+    const stats = shuffle(STAT_KEYS, rand);
+    return {
+      species: s.name,
+      ability: s.abilities ? Object.values(s.abilities)[Math.floor(rand() * Object.values(s.abilities).length)] : undefined,
+      item: gen.num >= 2 && items.length ? pick(items) : undefined,
+      nature: pick(NATURE_NAMES),
+      evs: gen.num >= 3 ? { [stats[0]]: 252, [stats[1]]: 252, [stats[2]]: 4 } : undefined,
+      moves: [...mv]
+    };
+  });
+}
+
+// AUC: probability that a random positive outscores a random negative (ties count half).
+// Rank-based (Mann-Whitney U), O(n log n).
 function auc(pos, neg) {
   if (!pos.length || !neg.length) return NaN;
-  let wins = 0;
-  for (const p of pos) for (const n of neg) wins += p > n ? 1 : p === n ? 0.5 : 0;
-  return wins / (pos.length * neg.length);
+  const all = pos.map(v => [v, 1]).concat(neg.map(v => [v, 0])).sort((a, b) => a[0] - b[0]);
+  let rankSumPos = 0;
+  for (let i = 0; i < all.length;) {
+    let j = i;
+    while (j < all.length && all[j][0] === all[i][0]) j++;
+    const avgRank = (i + j + 1) / 2; // ranks i+1..j share their average
+    for (let k = i; k < j; k++) if (all[k][1]) rankSumPos += avgRank;
+    i = j;
+  }
+  return (rankSumPos - pos.length * (pos.length + 1) / 2) / (pos.length * neg.length);
 }
 
 // 95% bootstrap confidence interval for the AUC
@@ -103,22 +146,20 @@ function aucInterval(pos, neg, rand, rounds = 1000) {
   return [vals[Math.floor(rounds * 0.025)], vals[Math.floor(rounds * 0.975)]];
 }
 
-// Every weight combination in steps of `step` with completeness fixed (complete sets can't calibrate it).
-// With withThreats the threat-matchup weight is searched too.
-function weightGrid(step = 5, completeness = 15, withThreats = false) {
-  const out = [];
+// Every weight combination in steps of `step` over `keys` (the last key takes the remainder), with
+// completeness fixed: complete sets can't calibrate it. Default keys match the earlier 4-way search.
+function weightGrid(step = 5, completeness = 15, withThreats = false, keys) {
+  const k = keys || (withThreats ? ["offense", "defense", "threats", "roles"] : ["offense", "defense", "roles"]);
   const rest = 100 - completeness;
-  for (let o = 0; o <= rest; o += step) {
-    for (let d = 0; o + d <= rest; d += step) {
-      for (let t = 0; o + d + t <= rest; t += step) {
-        if (!withThreats && t > 0) break;
-        out.push({ offense: o, defense: d, roles: rest - o - d - t, completeness, threats: t });
-      }
-    }
-  }
+  const out = [];
+  const walk = (i, left, acc) => {
+    if (i === k.length - 1) { out.push({ offense: 0, defense: 0, roles: 0, threats: 0, viability: 0, ...acc, [k[i]]: left, completeness }); return; }
+    for (let v = 0; v <= left; v += step) walk(i + 1, left - v, { ...acc, [k[i]]: v });
+  };
+  walk(0, rest, {});
   return out;
 }
 
 const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
-module.exports = { loadCalc, rng, shuffle, toMember, baselineTeam, auc, aucInterval, weightGrid, mean };
+module.exports = { loadCalc, rng, shuffle, toMember, baselineTeam, randomTeam, auc, aucInterval, weightGrid, mean };

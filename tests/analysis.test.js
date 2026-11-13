@@ -124,14 +124,15 @@ test("coverage comes from damaging moves only", () => {
 test("score: components are bounded and weighted to 100", () => {
   for (const style of ["singles", "doubles"]) {
     const w = A.CALIBRATED_WEIGHTS[style];
-    assert.equal(w.offense + w.defense + w.roles + w.completeness + w.threats, 100, style);
+    assert.equal(w.offense + w.defense + w.roles + w.completeness + w.threats + w.viability, 100, style);
   }
   // Without threat data the displayed weights are renormalized over the remaining components
   assert.equal(A.analyzeTeam(BALANCED, INFO).score.components.reduce((a, c) => a + c.weight, 0), 100);
   const withThreat = A.analyzeTeam(BALANCED, INFO, { threat: { score: 80, considered: 20, notHighShare: 0.8, ohkoAvoidance: 0.8 } }).score;
   assert.equal(withThreat.components.reduce((a, c) => a + c.weight, 0), 100);
-  assert.equal(withThreat.components.find(c => c.id === "threats").weight, 30);
-  assert.ok(withThreat.calibration.testAuc > 0.5);
+  assert.equal(withThreat.components.find(c => c.id === "threats").weight, A.CALIBRATED_WEIGHTS.singles.threats);
+  assert.ok(withThreat.calibration.vsPopular > 0.5 && withThreat.calibration.vsRandom > 0.9);
+  assert.ok(withThreat.calibration.means.expert > withThreat.calibration.means.random);
   const r = A.analyzeTeam(BALANCED, INFO);
   r.score.components.forEach(c => assert.ok(c.score >= 0 && c.score <= 100, c.id));
   assert.ok(r.score.overall >= 0 && r.score.overall <= 100);

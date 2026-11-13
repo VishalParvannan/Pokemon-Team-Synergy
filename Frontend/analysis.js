@@ -6,9 +6,10 @@
 (function (root, factory) {
   const L = typeof require === "function" ? require("./logic.js") : root.PokeLogic;
   const T = typeof require === "function" ? require("./team.js") : root.PokeTeam;
-  if (typeof module === "object" && module.exports) module.exports = factory(L, T);
-  else root.PokeAnalysis = factory(L, T);
-})(typeof self !== "undefined" ? self : this, function (L, T) {
+  const V = typeof require === "function" ? require("./viability.js") : root.PokeViability;
+  if (typeof module === "object" && module.exports) module.exports = factory(L, T, V);
+  else root.PokeAnalysis = factory(L, T, V);
+})(typeof self !== "undefined" ? self : this, function (L, T, V) {
   const { ALL_TYPES, getDefensiveMultiplier, coveredTypes, dualTypeCoverage, calcAllStats } = L;
   const pretty = T.pretty;
 
@@ -33,8 +34,9 @@
   };
 
   // Returns { mult, source: "type" | "ability" | "item" } for one attacking type
-  function defensiveMultiplier(member, atkType) {
-    const base = getDefensiveMultiplier(member.types || [], atkType);
+  // gen: the format's generation (selects the type chart); omitted = current chart
+  function defensiveMultiplier(member, atkType, gen) {
+    const base = getDefensiveMultiplier(member.types || [], atkType, gen);
     if (member.item === "air-balloon" && atkType === "ground") return { mult: 0, source: "item" };
     const ab = ABILITY_DEFENSE[member.ability];
     if (ab) {
@@ -46,12 +48,12 @@
   }
 
   // Per attacking type: counts and which members are weak / resist / immune
-  function defensiveSummary(members) {
+  function defensiveSummary(members, gen) {
     const summary = {};
-    ALL_TYPES.forEach(atk => {
+    L.typesFor(gen).forEach(atk => {
       const s = { weak: 0, resist: 0, immune: 0, viaAbilityOrItem: 0, weakNames: [], resistNames: [], immuneNames: [], quadNames: [] };
       members.forEach(m => {
-        const { mult, source } = defensiveMultiplier(m, atk);
+        const { mult, source } = defensiveMultiplier(m, atk, gen);
         if (mult === 0) { s.immune++; s.immuneNames.push(m.name); if (source !== "type") s.viaAbilityOrItem++; }
         else if (mult > 1) { s.weak++; s.weakNames.push(m.name); if (mult >= 4) s.quadNames.push(m.name); }
         else if (mult < 1) { s.resist++; s.resistNames.push(m.name); }
@@ -63,7 +65,7 @@
 
   // Types that hit 2+ members, with the members that can take the hit
   function sharedWeaknesses(summary) {
-    return ALL_TYPES.filter(t => summary[t].weak >= 2).map(t => ({
+    return Object.keys(summary).filter(t => summary[t].weak >= 2).map(t => ({
       type: t, weakNames: summary[t].weakNames,
       answers: summary[t].resistNames.concat(summary[t].immuneNames)
     })).sort((a, b) => (b.weakNames.length - b.answers.length) - (a.weakNames.length - a.answers.length));
@@ -85,12 +87,14 @@
     fakeOut: ["fake-out"],
     redirection: ["follow-me", "rage-powder", "ally-switch", "spotlight"],
     protect: ["protect", "detect", "spiky-shield", "kings-shield", "baneful-bunker", "obstruct", "silk-trap", "burning-bulwark"],
-    support: ["helping-hand", "wide-guard", "quick-guard", "coaching", "decorate", "pollen-puff", "after-you", "instruct", "beat-up"]
+    support: ["helping-hand", "wide-guard", "quick-guard", "coaching", "decorate", "pollen-puff", "after-you", "instruct", "beat-up", "snarl", "breaking-swipe", "struggle-bug"]
   };
   // Moves that hit more than one target in doubles (PokeAPI move targets); names are the fallback when move data is missing
   const SPREAD_TARGETS = ["all-other-pokemon", "all-opponents"];
   const SPREAD_FALLBACK = ["earthquake", "rock-slide", "heat-wave", "dazzling-gleam", "hyper-voice", "surf", "discharge", "blizzard", "icy-wind", "electroweb", "bulldoze", "snarl", "make-it-rain", "eruption", "water-spout", "muddy-water", "sludge-wave", "glacial-lance", "astral-barrage", "boomburst", "parabolic-charge", "lava-plume", "bleakwind-storm", "springtide-storm", "sandsear-storm", "wildbolt-storm"];
   const PRIORITY_FALLBACK = ["extreme-speed", "fake-out", "aqua-jet", "bullet-punch", "ice-shard", "mach-punch", "shadow-sneak", "sucker-punch", "quick-attack", "vacuum-wave", "water-shuriken", "accelerock", "jet-punch", "first-impression", "thunderclap", "upper-hand"];
+  // Moves that earn a slot without dealing damage (every role list above), for the viability check
+  const UTILITY_MOVES = () => new Set(Object.values(MOVE_ROLES).flat().concat(PRIORITY_FALLBACK));
   const WEATHER_ABILITIES = ["drought", "drizzle", "sand-stream", "snow-warning", "orichalcum-pulse", "hadron-engine", "electric-surge", "grassy-surge", "psychic-surge", "misty-surge", "desolate-land", "primordial-sea", "delta-stream", "sand-spit", "seed-sower"];
 
   const ROLE_LABELS = {
@@ -141,12 +145,13 @@
   }
 
   // ---- Coverage ----
-  function coverage(members, moveInfo) {
+  function coverage(members, moveInfo, gen) {
     const picked = Array.from(new Set(members.flatMap(m => m.moves.filter(Boolean))));
     const unresolved = picked.filter(m => !(moveInfo && moveInfo[m]));
     const moveTypes = Array.from(new Set(picked.map(m => moveInfo && moveInfo[m]).filter(i => i && i.damageClass !== "status").map(i => i.type)));
-    const covered = coveredTypes(moveTypes);
-    return { moveTypes, covered, uncovered: ALL_TYPES.filter(t => !covered.includes(t)), dual: dualTypeCoverage(moveTypes), unresolved };
+    const covered = coveredTypes(moveTypes, gen);
+    const types = L.typesFor(gen);
+    return { moveTypes, covered, uncovered: types.filter(t => !covered.includes(t)), typeCount: types.length, dual: dualTypeCoverage(moveTypes, gen), unresolved };
   }
 
   // ---- Score: weighted checklist (documented in SCORE_COMPONENTS, not a competitive rating) ----
@@ -157,12 +162,15 @@
   // Component weights (sum 100), calibrated per battle style against Smogon sample teams vs random
   // teams of popular sets; see calibration/README.md (run: node calibration/run.js).
   const CALIBRATED_WEIGHTS = {
-    singles: { offense: 25, defense: 30, roles: 0, completeness: 15, threats: 30 },
-    doubles: { offense: 5, defense: 10, roles: 5, completeness: 15, threats: 65 }
+    singles: { offense: 20, defense: 20, roles: 5, completeness: 15, threats: 20, viability: 20 },
+    doubles: { offense: 0, defense: 5, roles: 5, completeness: 15, threats: 40, viability: 35 }
   };
   const CALIBRATION = {
-    singles: { testAuc: 0.633, ci95: [0.553, 0.703], before: 0.591, experts: 207, baselines: 1682 },
-    doubles: { testAuc: 0.685, ci95: [0.516, 0.839], before: 0.503, experts: 33, baselines: 312 }
+    // Held-out AUC vs each baseline, and mean test scores of each kind of team (reference points for the report)
+    singles: { vsPopular: 0.648, vsPopularCi95: [0.571, 0.714], vsRandom: 0.995, vsRandomCi95: [0.989, 0.998],
+      experts: 207, popular: 1680, random: 844, means: { expert: 85, popular: 83, random: 66 } },
+    doubles: { vsPopular: 0.775, vsPopularCi95: [0.58, 0.93], vsRandom: 1, vsRandomCi95: [1, 1],
+      experts: 33, popular: 312, random: 156, means: { expert: 91, popular: 88, random: 63 } }
   };
   const DEFAULT_WEIGHTS = CALIBRATED_WEIGHTS.singles;
   // withThreats: include the threat-matchup component (only when usage data and the calculator ran;
@@ -170,11 +178,14 @@
   function scoreComponents(doubles, weights, withThreats) {
     const w = { ...CALIBRATED_WEIGHTS[doubles ? "doubles" : "singles"], ...(weights || {}) };
     const list = [
-      { id: "offense", label: "Offensive coverage", weight: w.offense, explain: "40% share of the 18 types hit super-effectively by at least one selected damaging move, 60% share of the 153 dual-type combinations hit super-effectively." },
+      { id: "offense", label: "Offensive coverage", weight: w.offense, explain: "40% share of the format's types (18 from Gen 6, 17 in Gen 2-5, 15 in Gen 1) hit super-effectively by at least one selected damaging move, 60% share of all dual-type combinations hit super-effectively." },
       { id: "defense", label: "Defensive balance", weight: w.defense, explain: "Starts at 100. Subtracts 7 for every extra member weak to a type beyond those that resist or are immune to it (abilities and Air Balloon included), and 4 per 4x weakness." },
       { id: "roles", label: doubles ? "Team roles (doubles)" : "Team roles (singles)", weight: w.roles, explain: (doubles ? ROLES_EXPLAIN.doubles : ROLES_EXPLAIN.singles) + (w.roles === 0 ? " Shown for information only: in calibration it did not separate expert teams from random ones, so it carries no weight." : "") },
       { id: "completeness", label: "Set completeness", weight: w.completeness, explain: "60% filled slots out of six, 40% how complete each set is (ability, item and four moves)." }
     ];
+    if (w.viability > 0) {
+      list.push({ id: "viability", label: "Competitive viability", weight: w.viability, explain: "Average per Pokémon: base stat total vs the format's most-used Pokémon (35%), its strongest attack counting STAB (15%), how many moves earn their slot (20%), whether its item does anything for it (15%) and EV investment (15%); x0.6 if not fully evolved without Eviolite. Criteria from the VGCguide team-building chapters (Wolfe Glick, Aaron Traylor) and standard competitive practice." });
+    }
     if (withThreats && w.threats > 0) {
       list.push({ id: "threats", label: "Threat matchups", weight: w.threats, explain: "Against the 20 most-used Pokémon of the format with their most common sets (damage calculations): half the share that are not high-level threats, half how rarely they OHKO your Pokémon." });
     }
@@ -190,11 +201,11 @@
       return { overall: 0, components: COMPONENTS.map(c => ({ ...c, score: 0, details: [] })), calibration: CALIBRATION[doubles ? "doubles" : "singles"], threatsIncluded: !!threat };
     }
     // Offense
-    const offense = Math.round(100 * (0.4 * cov.covered.length / 18 + 0.6 * cov.dual.hit / cov.dual.total));
-    const offenseDetails = [`${cov.covered.length}/18 types and ${cov.dual.hit}/${cov.dual.total} dual-type combinations hit super-effectively.`];
+    const offense = Math.round(100 * (0.4 * cov.covered.length / cov.typeCount + 0.6 * cov.dual.hit / cov.dual.total));
+    const offenseDetails = [`${cov.covered.length}/${cov.typeCount} types and ${cov.dual.hit}/${cov.dual.total} dual-type combinations hit super-effectively.`];
     // Defense
     let excess = 0, quad = 0;
-    ALL_TYPES.forEach(t => {
+    Object.keys(summary).forEach(t => {
       const s = summary[t];
       excess += Math.max(0, s.weak - (s.resist + s.immune));
       quad += s.quadNames.length;
@@ -231,8 +242,10 @@
     const completeness = Math.round(100 * (0.6 * members.length / 6 + 0.4 * setFill));
     const completeDetails = [`${members.length}/6 slots filled; sets are ${Math.round(setFill * 100)}% complete on average.`];
 
-    const scores = { offense, defense, roles: roleScore, completeness, threats: threat ? threat.score : 0 };
+    const via = ctx.viability;
+    const scores = { offense, defense, roles: roleScore, completeness, threats: threat ? threat.score : 0, viability: via ? via.score : 0 };
     const details = { offense: offenseDetails, defense: defenseDetails, roles: roleDetails, completeness: completeDetails,
+      viability: via ? via.members.map(p => `${pretty(p.name)}: ${p.score}${p.issues.length ? ` (${p.issues[0]})` : ""}`) : [],
       threats: threat ? [`${Math.round(threat.notHighShare * threat.considered)}/${threat.considered} top threats are not high-level threats; on average they OHKO ${Math.round((1 - threat.ohkoAvoidance) * 100)}% of your team.`] : [] };
     // Weights are renormalized over the components present (threats are absent without usage data)
     const totalWeight = COMPONENTS.reduce((a, c) => a + c.weight, 0) || 1;
@@ -247,7 +260,7 @@
 
   // ---- Observations: each states the evidence it rests on ----
   function observations(members, ctx) {
-    const { summary, cov, roles, shared, validation } = ctx;
+    const { summary, cov, roles, shared, validation, viability } = ctx;
     const out = [];
     const add = (priority, text, evidence) => out.push({ priority, text, evidence: evidence || "" });
     const names = list => list.map(pretty).join(", ");
@@ -265,15 +278,21 @@
         add("medium", `${pretty(type)} hits two members super-effectively and nothing on the team resists or is immune to it.`, `Weak: ${names(weakNames)}.`);
       }
     });
-    const quads = ALL_TYPES.filter(t => summary[t].quadNames.length);
+    const quads = Object.keys(summary).filter(t => summary[t].quadNames.length);
     quads.forEach(t => add("low", `${names(summary[t].quadNames)} take 4x damage from ${pretty(t)} moves.`));
 
-    const unanswered = ALL_TYPES.filter(t => summary[t].resist + summary[t].immune === 0);
+    const unanswered = Object.keys(summary).filter(t => summary[t].resist + summary[t].immune === 0);
     if (members.length >= 3 && unanswered.length >= 4) {
       add("medium", `No member resists or is immune to ${names(unanswered.slice(0, 6))}${unanswered.length > 6 ? ", …" : ""}.`);
     }
     if (cov.moveTypes.length === 0) add("high", "No damaging moves are selected, so offensive coverage cannot be assessed.");
     else if (cov.uncovered.length) add("medium", `Selected damaging moves do not hit ${names(cov.uncovered.slice(0, 6))}${cov.uncovered.length > 6 ? ", …" : ""} super-effectively.`, `Move types used: ${names(cov.moveTypes)}.`);
+    if (viability && viability.members.length) {
+      const unevolved = viability.members.filter(p => p.unevolved).map(p => p.name);
+      if (unevolved.length >= 2) add(unevolved.length >= 3 ? "high" : "medium", `${unevolved.length} of your Pokémon are not fully evolved and hold no Eviolite. They can work in specific roles, but a team of them is usually outclassed.`, `Not fully evolved: ${names(unevolved)}.`);
+      viability.members.filter(p => p.score < 50).forEach(p => add("medium", `${pretty(p.name)} looks weak for this format (viability ${p.score}/100).`, p.issues.join("; ") + "."));
+      viability.members.filter(p => p.score >= 50 && p.issues.some(i => /item|Eviolite|Vest|locks it/.test(i))).forEach(p => add("low", `${pretty(p.name)}'s item does little for it.`, p.issues.filter(i => /item|Eviolite|Vest|locks it|only works|boosts|no effect/.test(i)).join("; ") + "."));
+    }
     if (cov.unresolved.length) add("medium", `Could not look up ${names(cov.unresolved)}; they are left out of coverage and role detection.`);
 
     if (ctx.doubles) {
@@ -306,31 +325,36 @@
   // Assumptions shown with every report
   function assumptions(doubles) {
     return [
-      "Type summaries use the Generation 6+ type chart (with Fairy). Damage calculations and threats use the format's own generation mechanics.",
+      "Type matchups use the format's generation chart (no Fairy before Gen 6, no Dark or Steel in Gen 1, and Gen 1's Ghost/Psychic, Bug/Poison and Ice/Fire quirks) and each Pokémon's types in that generation. The 'All Pokémon' format uses the current chart.",
       "Defense accounts for typing, the abilities listed in the code (e.g. Levitate, Flash Fire, Thick Fat) and Air Balloon. Mold Breaker, weather, Tera types and other effects are not modelled.",
       "Coverage uses the type of each selected damaging move. Move power, accuracy and STAB are covered by the damage calculator and threat list, not by the coverage summary.",
       doubles
         ? "Roles are detected from move and ability names for doubles play (speed control, Fake Out, Protect, spread moves, redirection). VGC-specific rules (level 50, bring six pick four, restricted Pokémon) are not applied."
         : "Roles are detected from move and ability names and assume singles play. Switch to Doubles to evaluate doubles roles.",
       "Speed uses each set's own level, nature, IVs and EVs, with Choice Scarf. Stat stages, weather and paralysis are ignored.",
-      `The score's weights were calibrated so that Smogon sample teams outscore random teams of popular sets. On held-out teams an expert team outscores a random one ${Math.round(CALIBRATION[doubles ? "doubles" : "singles"].testAuc * 100)}% of the time (50% would be chance). It is a modest signal, not a competitive rating.`
+      `The score's weights were calibrated so that Smogon sample teams outscore both random teams of popular sets and fully random teams. On held-out teams an expert team outscores the first ${Math.round(CALIBRATION[doubles ? "doubles" : "singles"].vsPopular * 100)}% of the time and the second ${Math.round(CALIBRATION[doubles ? "doubles" : "singles"].vsRandom * 100)}% (50% would be chance). It reliably spots unviable teams but only weakly ranks good teams against each other; it is not a competitive rating.`
     ];
   }
   const ASSUMPTIONS = assumptions(false);
 
   // One call for the whole report. members: filled slots. moveInfo: { move: {type, damageClass, priority} }
   function analyzeTeam(members, moveInfo, opts) {
-    const summary = defensiveSummary(members);
-    const list = (key) => ALL_TYPES.filter(t => summary[t][key] > 0).map(t => ({ type: t, count: summary[t][key], names: summary[t][key + "Names"] })).sort((a, b) => b.count - a.count);
+    const gen = opts && opts.gen ? opts.gen : null;
+    const summary = defensiveSummary(members, gen);
+    const list = (key) => Object.keys(summary).filter(t => summary[t][key] > 0).map(t => ({ type: t, count: summary[t][key], names: summary[t][key + "Names"] })).sort((a, b) => b.count - a.count);
     const roles = teamRoles(members, moveInfo);
-    const cov = coverage(members, moveInfo);
+    const cov = coverage(members, moveInfo, gen);
     const shared = sharedWeaknesses(summary);
     const doubles = !!(opts && opts.doubles);
-    const score = scoreTeam(members, { cov, summary, roles, doubles, weights: opts && opts.weights, threat: opts && opts.threat });
+    const viability = V.teamViability(members, {
+      gen, moveInfo, utilityMoves: UTILITY_MOVES(),
+      refBst: opts && opts.refBst, speciesInfo: opts && opts.speciesInfo, battleItems: opts && opts.battleItems
+    });
+    const score = scoreTeam(members, { cov, summary, roles, doubles, viability, weights: opts && opts.weights, threat: opts && opts.threat });
     return {
       summary, weaknesses: list("weak"), resistances: list("resist"), immunities: list("immune"),
-      shared, roles, roleKeys: doubles ? ROLE_KEYS.doubles : ROLE_KEYS.singles, cov, speed: speedTiers(members), score, doubles,
-      observations: observations(members, { summary, cov, roles, shared, doubles, validation: opts && opts.validation }),
+      gen, viability, shared, roles, roleKeys: doubles ? ROLE_KEYS.doubles : ROLE_KEYS.singles, cov, speed: speedTiers(members), score, doubles,
+      observations: observations(members, { summary, cov, roles, shared, doubles, viability, validation: opts && opts.validation }),
       assumptions: assumptions(doubles)
     };
   }

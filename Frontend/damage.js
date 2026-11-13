@@ -3,7 +3,11 @@
 // Browser: needs vendor/smogon-calc/*.min.js loaded first (window.calc). Node: createDamage(calcLib).
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
-  else root.PokeDamage = factory(root.calc);
+  else {
+    // The calculator bundle is loaded on demand (calc-loader.js), which then calls createPokeDamage
+    root.createPokeDamage = factory;
+    root.PokeDamage = root.calc ? factory(root.calc) : null;
+  }
 })(typeof self !== "undefined" ? self : this, function createDamage(calc) {
   const available = !!(calc && calc.calculate && calc.Generations);
   const STAT_KEYS = ["hp", "atk", "def", "spa", "spd", "spe"];
@@ -125,5 +129,15 @@
     return best;
   }
 
-  return { available, DEFENDER_SPREADS, generation, resolveSpecies, resolveMove, resolveItem, resolveAbility, toCalcPokemon, hypotheticalSlot, isDamaging, calculate, bestMove };
+  // { bst, nfe } for a Pokémon in a generation (base stat total as of that generation), or null
+  function speciesInfo(genNum, apiName) {
+    if (!available) return null;
+    const gen = generation(genNum);
+    const name = resolveSpecies(gen, apiName);
+    const s = name && gen.species.get(toID(name));
+    if (!s) return null;
+    return { bst: Object.values(s.baseStats).reduce((a, b) => a + b, 0), nfe: !!s.nfe };
+  }
+
+  return { available, DEFENDER_SPREADS, generation, speciesInfo, resolveSpecies, resolveMove, resolveItem, resolveAbility, toCalcPokemon, hypotheticalSlot, isDamaging, calculate, bestMove };
 });

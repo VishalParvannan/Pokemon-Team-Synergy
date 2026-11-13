@@ -258,7 +258,9 @@ test("formats: version groups and eras", () => {
   assert.deepEqual(F.findFormat("gen9").versionGroups, F.GEN_VERSION_GROUPS[9]);
   assert.equal(F.findFormat("swsh-full").era, 8);
   assert.equal(F.findFormat("unknown-id").id, "any");
-  assert.ok(F.limitations(F.findFormat("gen1")).length >= 3);
+  const gen1 = F.limitations(F.findFormat("gen1")).join(" ");
+  assert.match(gen1, /stat system/); // Gen 1-2 stats caveat remains
+  assert.doesNotMatch(gen1, /Fairy/); // type charts are now per generation, so no Fairy caveat
 });
 
 test("api parsers: learnsets, pools by version group, move and generation info", () => {
@@ -275,6 +277,9 @@ test("api parsers: learnsets, pools by version group, move and generation info",
   });
   assert.equal(parsed.species, "charizard");
   assert.deepEqual(parsed.types, ["fire", "dragon"]);
+  assert.deepEqual(parsed.pastTypes, []);
+  const clef = A.parsePokemon({ name: "clefable", types: [{ type: { name: "fairy" } }], past_types: [{ generation: { name: "generation-v" }, types: [{ type: { name: "normal" } }] }], moves: [] });
+  assert.deepEqual(clef.pastTypes, [{ gen: 5, types: ["normal"] }]);
   assert.equal(parsed.abilities[1].hidden, true);
   assert.equal(parsed.stats.spe, 100);
   assert.equal(parsed.stats.spa, 130);

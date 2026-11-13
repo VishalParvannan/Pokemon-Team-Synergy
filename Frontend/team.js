@@ -55,7 +55,7 @@
 
   function serializeSlot(slot) {
     if (!slot.name) { const { movePool, ...empty } = createEmptySlot(); return empty; }
-    const { learn, movePool, dataState, ...persisted } = slot;
+    const { learn, movePool, dataState, pastTypes, ...persisted } = slot;
     return JSON.parse(JSON.stringify(persisted));
   }
 

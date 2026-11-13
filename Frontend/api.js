@@ -51,6 +51,8 @@
       species: res.species && res.species.name ? res.species.name : res.name,
       sprite: res.sprites && typeof res.sprites.front_default === "string" && /^https:\/\//.test(res.sprites.front_default) ? res.sprites.front_default : "",
       types: (res.types || []).map(t => t.type.name),
+      // Earlier typings: [{ gen, types }] where `types` applied up to and including `gen` (e.g. Clefable: Normal to Gen 5)
+      pastTypes: (res.past_types || []).map(p => ({ gen: GEN_NUMBER[p.generation.name], types: p.types.map(t => t.type.name) })).filter(p => p.gen),
       abilities: (res.abilities || []).map(a => ({ name: a.ability.name, hidden: !!a.is_hidden })),
       stats, learn
     };

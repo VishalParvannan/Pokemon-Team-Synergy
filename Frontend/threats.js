@@ -3,7 +3,10 @@
 // Pure apart from the damage module it is given.
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
-  else root.PokeThreats = factory(root.PokeDamage);
+  else {
+    root.createPokeThreats = factory; // called by calc-loader.js once the calculator has loaded
+    root.PokeThreats = root.PokeDamage ? factory(root.PokeDamage) : null;
+  }
 })(typeof self !== "undefined" ? self : this, function createThreats(D) {
   // Thresholds, stated in the UI next to the results
   const SAFE_SWITCH_MAX = 50; // a member is a safe switch-in if the threat's best move does at most this % (max roll)
@@ -108,5 +111,12 @@
     };
   }
 
-  return { SAFE_SWITCH_MAX, STRONG_HIT_MIN, SCORE_TOP_N, snapshotFor, threatSlot, analyzeThreats, threatScore };
+  // The format's reference strength: median base stat total of the snapshot's most-used Pokémon
+  function referenceBst(genNum, snapshot) {
+    if (!D || !D.available || !snapshot) return null;
+    const v = snapshot.threats.map(t => { const i = D.speciesInfo(genNum, t.name); return i ? i.bst : 0; }).filter(x => x > 0).sort((a, b) => a - b);
+    return v.length ? v[Math.floor(v.length / 2)] : null;
+  }
+
+  return { SAFE_SWITCH_MAX, STRONG_HIT_MIN, SCORE_TOP_N, snapshotFor, threatSlot, analyzeThreats, threatScore, referenceBst };
 });

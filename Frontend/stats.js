@@ -15,7 +15,8 @@
 
   store.teams.forEach(team => {
     const members = team.slots.filter(s => s.name);
-    const summary = PokeAnalysis.defensiveSummary(members);
+    // Saved teams don't keep earlier typings, so current types are used with the format's chart
+    const summary = PokeAnalysis.defensiveSummary(members, PokeFormats.findFormat(team.format.id).era);
     const shared = PokeAnalysis.sharedWeaknesses(summary).filter(s => s.answers.length < s.weakNames.length);
     const card = document.createElement("article");
     card.className = "team-summary";

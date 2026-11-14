@@ -92,6 +92,56 @@ h1 {
 .analyze-button { padding: 14px 32px; font-size: 15px; box-shadow: 0 6px 18px rgba(220, 38, 38, 0.25); }
 .analyze-button img { object-fit: contain; }
 .analysis-section { margin-bottom: 24px; }
+.analysis-section:focus { outline: none; }
+.report-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.report-nav.bottom { margin: 24px 0 0; justify-content: center; }
+.back-button { height: 38px; padding: 0 16px; }
+.report-team { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 16px; }
+.report-member { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 8px; padding: 2px 10px 2px 4px; }
+.analyze-row { gap: 12px; flex-wrap: wrap; }
+.synergy-score-card .grade-label { font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 10px; }
+
+/* Report tabs and panels */
+.report-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--panel-border); margin-bottom: 0; scrollbar-width: thin; }
+.report-tabs [role=tab] { background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); font: 600 13px 'Inter', sans-serif; padding: 10px 14px; cursor: pointer; white-space: nowrap; }
+.report-tabs [role=tab]:hover { color: var(--text-main); }
+.report-tabs [role=tab][aria-selected=true] { color: #fff; border-bottom-color: var(--accent); }
+.report-tabs [role=tab].alert::after { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #ef4444; margin-left: 6px; vertical-align: middle; }
+.report-panel { background: var(--panel); border: 1px solid var(--panel-border); border-top: none; border-radius: 0 0 12px 12px; padding: 18px 20px; }
+.panel-title { font-size: 15px; color: #fff; margin-bottom: 8px; }
+.panel-title.spaced, .sub-text.spaced { margin-top: 18px; }
+.report-grid.two { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin: 16px 0 0; }
+.report-grid.two .report-card { background: #0b0e1a; }
+.report-panel .threat-list { margin-top: 4px; }
+
+/* Defensive type chart */
+.type-chart-wrap { overflow-x: auto; margin: 8px 0 4px; }
+.type-chart { border-collapse: separate; border-spacing: 2px; font-size: 12px; width: 100%; min-width: 420px; }
+.type-chart th { font-weight: 600; color: var(--text-muted); text-align: center; padding: 2px; vertical-align: bottom; }
+.type-chart thead th img, .type-chart thead th .tab-icon-placeholder { display: block; margin: 0 auto; }
+.tc-name { display: block; font-size: 10px; max-width: 64px; margin: 0 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.type-chart th.tc-type { text-align: left; width: 84px; position: sticky; left: 0; z-index: 1; background: var(--panel); }
+.type-chart th.tc-type .type-pill { display: inline-block; width: 72px; text-align: center; }
+.tc-cell { text-align: center; height: 24px; min-width: 32px; border-radius: 4px; background: #0b0e1a; font-weight: 700; color: var(--text-main); }
+.tc-cell.weak { background: #7f1d1d; color: #fecaca; }
+.tc-cell.quad { background: #dc2626; color: #fff; }
+.tc-cell.resist { background: #14532d; color: #bbf7d0; }
+.tc-cell.dresist { background: #15803d; color: #fff; }
+.tc-cell.immune { background: #1e3a8a; color: #bfdbfe; }
+.tc-count { text-align: center; font-weight: 700; color: var(--text-faint); width: 48px; }
+.tc-count.bad { color: #fca5a5; }
+.tc-count.good { color: #86efac; }
+.tc-problem th.tc-type { box-shadow: inset 3px 0 0 #ef4444; }
+.tc-problem .tc-cell:not(.weak):not(.quad) { background: #1c1325; }
+.tc-legend { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+.tc-legend .tc-cell { display: inline-block; min-width: 28px; height: auto; padding: 2px 6px; }
+
+/* Viability rows */
+.viability-list { list-style: none; display: grid; gap: 8px; margin-top: 6px; }
+.viability-row { background: #0b0e1a; border: 1px solid #1f2640; border-radius: 6px; padding: 8px 12px; }
+.viability-head { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.viability-head strong { width: 130px; flex-shrink: 0; }
+.viability-head .metric-val { width: 28px; }
 .analysis-section > h2 { font-size: 18px; }
 
 .builder-container {
@@ -645,6 +695,10 @@ dialog textarea { width: 100%; background: #0b0e1a; color: var(--text-main); bor
   .stat-row { grid-template-columns: 34px 32px 40px minmax(40px, 1fr) 54px 48px; gap: 4px; font-size: 11px; }
   .format-select { min-width: 0; width: 100%; }
   .setting { flex: 1 1 100%; }
+  .report-tabs { flex-wrap: wrap; overflow: visible; }
+  .report-tabs [role=tab] { padding: 8px 10px; }
+  .report-panel { padding: 14px; }
+  .viability-head strong { width: 96px; }
   .push-right { margin-left: 0; }
   .settings-panel { padding: 14px; }
   h1 { font-size: 15px; }

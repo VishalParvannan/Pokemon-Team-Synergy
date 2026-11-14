@@ -66,6 +66,17 @@
       if (evs[k] !== undefined) opts.evs[k] = evs[k];
       if (ivs[k] !== undefined) opts.ivs[k] = ivs[k];
     });
+    // Gen 1-2 have one Special stat experience and DV shared by Special Attack and Special Defense:
+    // use the higher of the two for both, and say so when the set had them different
+    if (gen.num <= 2) {
+      ["evs", "ivs"].forEach(kind => {
+        const a = opts[kind].spa, d = opts[kind].spd;
+        if (a === undefined && d === undefined) return;
+        const shared = Math.max(a === undefined ? 0 : a, d === undefined ? 0 : d);
+        if (a !== d) notes.push(`${species}: in Gen ${gen.num} Special Attack and Special Defense share one value, so ${kind === "evs" ? "EVs" : "IVs"} of ${shared} were used for both.`);
+        opts[kind].spa = opts[kind].spd = shared;
+      });
+    }
     try {
       return { pokemon: new calc.Pokemon(gen, species, opts), notes };
     } catch (err) {

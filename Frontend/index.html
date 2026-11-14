@@ -8,7 +8,7 @@
   <link rel="icon" href="data:," />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20261114" />
+  <link rel="stylesheet" href="styles.css?v=20261114f" />
 </head>
 <body>
   <a class="skip-link" href="#teamTabs">Skip to team builder</a>
@@ -20,6 +20,9 @@
       </div>
       <nav class="top-nav" aria-label="Pages"><a href="stats.html">Saved teams →</a></nav>
     </header>
+
+    <!-- View 1: team editor -->
+    <div id="editorView">
     <p class="subtitle">Build a team for a chosen generation and format, check it against that format's rules, then see how it holds up competitively: type synergy, roles, speed, viability and the most-used threats.</p>
 
     <!-- Team and format settings -->
@@ -88,11 +91,26 @@
         <img src="../Images/pokeball.png" alt="" width="18" height="18" />
         Analyze Team Synergy
       </button>
+      <button type="button" id="viewReportBtn" class="submit-button secondary muted" hidden>View last report →</button>
     </div>
 
-    <section class="analysis-section" id="analysisSection" hidden aria-labelledby="reportTitle">
+    <!-- Damage calculator -->
+    <section class="damage-panel" aria-labelledby="damageTitle">
+      <h2 id="damageTitle">Damage calculator</h2>
+      <p class="sub-text">Uses your sets' level, nature, EVs, IVs, ability and item, with the format's generation mechanics. Powered by <a href="https://github.com/smogon/damage-calc" rel="noopener">@smogon/calc</a>, the engine behind Pokémon Showdown's calculator.</p>
+      <div id="damageControls" class="damage-controls"></div>
+      <div id="damageResult" class="damage-result" role="status" aria-live="polite"></div>
+    </section>
+    </div>
+
+    <!-- View 2: team report (shown after Analyze; Back returns to the editor with the team unchanged) -->
+    <section class="analysis-section" id="analysisSection" hidden aria-labelledby="reportTitle" tabindex="-1">
+      <div class="report-nav">
+        <button type="button" class="small-button back-button" data-back-to-editor>← Back to team editor</button>
+      </div>
       <h2 id="reportTitle">Team Synergy Report</h2>
       <p class="sub-text" id="reportFormat"></p>
+      <div class="report-team" id="reportTeam"></div>
 
       <div class="synergy-score-card">
         <div class="score-circle-container">
@@ -111,65 +129,67 @@
         </div>
       </div>
 
-      <div class="report-grid">
-        <div class="report-card wide">
-          <h3>Offensive coverage (selected damaging moves)</h3>
-          <p class="sub-text" id="superEffectiveText"></p>
-          <div class="type-pill-grid" id="coveredTypesGrid"></div>
-          <p class="sub-text" style="margin-top: 12px;">Not hit super-effectively:</p>
-          <div class="type-pill-grid" id="uncoveredTypesGrid"></div>
-        </div>
-        <div class="report-card wide">
-          <h3>Competitive viability</h3>
-          <p class="sub-text" id="viabilityIntro"></p>
-          <ul class="stat-list" id="viabilityList"></ul>
-        </div>
-        <div class="report-card">
-          <h3>Shared weaknesses and switch-ins</h3>
-          <ul class="stat-list" id="sharedWeakList"></ul>
-        </div>
-        <div class="report-card">
-          <h3>Weaknesses</h3>
-          <ul class="stat-list" id="weaknessesList"></ul>
-        </div>
-        <div class="report-card">
-          <h3>Resistances</h3>
-          <ul class="stat-list" id="resistancesList"></ul>
-        </div>
-        <div class="report-card">
-          <h3>Immunities</h3>
-          <ul class="stat-list" id="immunitiesList"></ul>
-        </div>
-        <div class="report-card">
-          <h3>Speed tiers (calculated)</h3>
-          <ul class="stat-list" id="speedTiersList"></ul>
-        </div>
-        <div class="report-card">
-          <h3 id="rolesTitle">Team roles (from moves and abilities)</h3>
-          <ul class="stat-list" id="rolesList"></ul>
+      <div class="report-tabs" role="tablist" aria-label="Report sections">
+        <button type="button" role="tab" id="rtab-summary" aria-controls="rpanel-summary" aria-selected="true">Summary</button>
+        <button type="button" role="tab" id="rtab-defense" aria-controls="rpanel-defense" aria-selected="false" tabindex="-1">Defense</button>
+        <button type="button" role="tab" id="rtab-offense" aria-controls="rpanel-offense" aria-selected="false" tabindex="-1">Offense</button>
+        <button type="button" role="tab" id="rtab-pokemon" aria-controls="rpanel-pokemon" aria-selected="false" tabindex="-1">Pokémon</button>
+        <button type="button" role="tab" id="rtab-threats" aria-controls="rpanel-threats" aria-selected="false" tabindex="-1">Threats</button>
+        <button type="button" role="tab" id="rtab-notes" aria-controls="rpanel-notes" aria-selected="false" tabindex="-1">Notes</button>
+      </div>
+
+      <div class="report-panel" role="tabpanel" id="rpanel-summary" aria-labelledby="rtab-summary">
+        <h3 class="panel-title">Observations</h3>
+        <div class="recommendations-list" id="recommendationsList"></div>
+      </div>
+
+      <div class="report-panel" role="tabpanel" id="rpanel-defense" aria-labelledby="rtab-defense" hidden>
+        <h3 class="panel-title">Type matchups</h3>
+        <p class="sub-text">Damage each team member takes from each attacking type, including ability and item effects. Rows where two or more members are weak and nothing resists are marked.</p>
+        <div class="type-chart-wrap" id="typeChart"></div>
+        <h3 class="panel-title spaced">Shared weaknesses and switch-ins</h3>
+        <ul class="stat-list" id="sharedWeakList"></ul>
+      </div>
+
+      <div class="report-panel" role="tabpanel" id="rpanel-offense" aria-labelledby="rtab-offense" hidden>
+        <h3 class="panel-title">Offensive coverage (selected damaging moves)</h3>
+        <p class="sub-text" id="superEffectiveText"></p>
+        <p class="sub-text">Hit super-effectively:</p>
+        <div class="type-pill-grid" id="coveredTypesGrid"></div>
+        <p class="sub-text spaced">Not hit super-effectively:</p>
+        <div class="type-pill-grid" id="uncoveredTypesGrid"></div>
+      </div>
+
+      <div class="report-panel" role="tabpanel" id="rpanel-pokemon" aria-labelledby="rtab-pokemon" hidden>
+        <h3 class="panel-title">Competitive viability</h3>
+        <p class="sub-text" id="viabilityIntro"></p>
+        <ul class="viability-list" id="viabilityList"></ul>
+        <div class="report-grid two">
+          <div class="report-card">
+            <h3>Speed tiers (calculated)</h3>
+            <ul class="stat-list" id="speedTiersList"></ul>
+          </div>
+          <div class="report-card">
+            <h3 id="rolesTitle">Team roles (from moves and abilities)</h3>
+            <ul class="stat-list" id="rolesList"></ul>
+          </div>
         </div>
       </div>
 
-      <div class="report-card threats-card">
-        <h3 id="threatsTitle">Threats from usage statistics</h3>
+      <div class="report-panel" role="tabpanel" id="rpanel-threats" aria-labelledby="rtab-threats" hidden>
+        <h3 class="panel-title" id="threatsTitle">Threats from usage statistics</h3>
         <p class="sub-text" id="threatsIntro"></p>
         <div id="threatsList"></div>
       </div>
 
-      <div class="next-steps-container">
-        <h3>Observations</h3>
-        <div class="recommendations-list" id="recommendationsList"></div>
-        <h3 style="margin-top:20px;">Assumptions and limits</h3>
+      <div class="report-panel" role="tabpanel" id="rpanel-notes" aria-labelledby="rtab-notes" hidden>
+        <h3 class="panel-title">Assumptions and limits</h3>
         <ul class="plain-list" id="assumptionsList"></ul>
       </div>
-    </section>
 
-    <!-- Damage calculator -->
-    <section class="damage-panel" aria-labelledby="damageTitle">
-      <h2 id="damageTitle">Damage calculator</h2>
-      <p class="sub-text">Uses your sets' level, nature, EVs, IVs, ability and item, with the format's generation mechanics. Powered by <a href="https://github.com/smogon/damage-calc" rel="noopener">@smogon/calc</a>, the engine behind Pokémon Showdown's calculator.</p>
-      <div id="damageControls" class="damage-controls"></div>
-      <div id="damageResult" class="damage-result" role="status" aria-live="polite"></div>
+      <div class="report-nav bottom">
+        <button type="button" class="small-button back-button" data-back-to-editor>← Back to team editor</button>
+      </div>
     </section>
 
     <footer class="site-footer">
@@ -193,19 +213,19 @@
     </div>
   </dialog>
 
-  <script src="logic.js?v=20261114"></script>
-  <script src="formats.js?v=20261114"></script>
-  <script src="team.js?v=20261114"></script>
-  <script src="viability.js?v=20261114"></script>
-  <script src="analysis.js?v=20261114"></script>
-  <script src="cache.js?v=20261114"></script>
-  <script src="api.js?v=20261114"></script>
-  <script src="damage.js?v=20261114"></script>
-  <script src="threats.js?v=20261114"></script>
-  <script src="calc-loader.js?v=20261114"></script>
-  <script src="controls.js?v=20261114"></script>
-  <script src="damage-panel.js?v=20261114"></script>
-  <script src="report.js?v=20261114"></script>
-  <script src="pokemon.js?v=20261114"></script>
+  <script src="logic.js?v=20261114f"></script>
+  <script src="formats.js?v=20261114f"></script>
+  <script src="team.js?v=20261114f"></script>
+  <script src="viability.js?v=20261114f"></script>
+  <script src="analysis.js?v=20261114f"></script>
+  <script src="cache.js?v=20261114f"></script>
+  <script src="api.js?v=20261114f"></script>
+  <script src="damage.js?v=20261114f"></script>
+  <script src="threats.js?v=20261114f"></script>
+  <script src="calc-loader.js?v=20261114f"></script>
+  <script src="controls.js?v=20261114f"></script>
+  <script src="damage-panel.js?v=20261114f"></script>
+  <script src="report.js?v=20261114f"></script>
+  <script src="pokemon.js?v=20261114f"></script>
 </body>
 </html>

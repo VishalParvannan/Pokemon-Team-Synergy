@@ -51,6 +51,18 @@ test("known calculation: 252+ Atk Choice Band Garchomp Earthquake vs 252 HP Heat
   assert.match(r.desc, /Choice Band Garchomp Earthquake vs\. 252 HP/);
 });
 
+test("Gen 1-2: different Special Attack and Special Defense values are merged instead of failing", () => {
+  const larvitar = set("larvitar", { evs: { hp: 252, atk: 252, def: 0, spa: 0, spd: 4, spe: 0 } });
+  const xatu = set("xatu", { evs: { hp: 4, atk: 0, def: 0, spa: 252, spd: 0, spe: 252 }, ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 20, spe: 31 } });
+  const r = D.calculate(2, larvitar, "earthquake", xatu);
+  assert.equal(r.error, undefined, r.error);
+  assert.equal(r.max, 0); // Flying is immune to Ground
+  const built = D.toCalcPokemon(D.generation(2), xatu);
+  assert.equal(built.pokemon.evs.spd, 252);
+  assert.match(built.notes.join(" "), /share one value/);
+  assert.ok(D.calculate(2, larvitar, "rock-slide", xatu).max > 0);
+});
+
 test("set details change the result: EVs, nature, item and ability", () => {
   const base = set("garchomp", { evs: { hp: 0, atk: 252, def: 0, spa: 0, spd: 0, spe: 0 } });
   const target = set("clefable");

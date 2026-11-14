@@ -18,7 +18,7 @@ Build a trustworthy, approachable Pokémon team builder that helps players under
 - `calibration/`: score calibration (expert Smogon sample teams vs two baselines: random teams of popular sets and fully random teams; AUC on a held-out split). `CALIBRATED_WEIGHTS`/`CALIBRATION` in analysis.js come from `node calibration/run.js`; rerun it after changing score components and update both.
 - `Frontend/threats.js`: matchups vs the most-used Pokémon of a format, from snapshots in `Frontend/data/threats/` built by `scripts/build-threats.js` (Smogon usage via data.pkmn.cc).
 - Teams have `format.doubles` (battle style): changes roles, roles score, threats and spread damage. Share links encode the team in the URL fragment (`team.js` encodeShare/decodeShare).
-- `Frontend/controls.js`, `report.js`: DOM widgets and report rendering.
+- `Frontend/controls.js`, `report.js`: DOM widgets and report rendering. The builder page has two views, `#editorView` and the report (`#analysisSection`, URL `#report`, its own history entry); `showView`/`openReport`/`backToEditor` in pokemon.js switch them, and any team edit retires the report. The report keeps the score on top and puts details in tabs (Summary, Defense type chart from `summary[type].mults`, Offense, Pokémon, Threats, Notes).
 - `Frontend/stats.html` + `stats.js`: saved teams page.
 - `index.html`/`stats.html` load local CSS/JS with a `?v=YYYYMMDD` tag so browsers don't reuse stale copies; bump it in both files whenever a CSS or JS file changes.
 - `tests/*.test.js`: `node --test tests/*.test.js`. `.claude/launch.json` serves the repo on port 8090.

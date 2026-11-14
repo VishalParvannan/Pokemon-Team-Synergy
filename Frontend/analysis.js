@@ -51,9 +51,11 @@
   function defensiveSummary(members, gen) {
     const summary = {};
     L.typesFor(gen).forEach(atk => {
-      const s = { weak: 0, resist: 0, immune: 0, viaAbilityOrItem: 0, weakNames: [], resistNames: [], immuneNames: [], quadNames: [] };
+      // mults: each member's multiplier, in team order (for the report's type chart)
+      const s = { weak: 0, resist: 0, immune: 0, viaAbilityOrItem: 0, weakNames: [], resistNames: [], immuneNames: [], quadNames: [], mults: [] };
       members.forEach(m => {
         const { mult, source } = defensiveMultiplier(m, atk, gen);
+        s.mults.push(mult);
         if (mult === 0) { s.immune++; s.immuneNames.push(m.name); if (source !== "type") s.viaAbilityOrItem++; }
         else if (mult > 1) { s.weak++; s.weakNames.push(m.name); if (mult >= 4) s.quadNames.push(m.name); }
         else if (mult < 1) { s.resist++; s.resistNames.push(m.name); }
@@ -352,6 +354,7 @@
     });
     const score = scoreTeam(members, { cov, summary, roles, doubles, viability, weights: opts && opts.weights, threat: opts && opts.threat });
     return {
+      members: members.map(m => ({ name: m.name, sprite: m.sprite || null })),
       summary, weaknesses: list("weak"), resistances: list("resist"), immunities: list("immune"),
       gen, viability, shared, roles, roleKeys: doubles ? ROLE_KEYS.doubles : ROLE_KEYS.singles, cov, speed: speedTiers(members), score, doubles,
       observations: observations(members, { summary, cov, roles, shared, doubles, viability, validation: opts && opts.validation }),

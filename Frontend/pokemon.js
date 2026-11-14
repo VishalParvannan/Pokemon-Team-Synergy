@@ -71,16 +71,51 @@ function setActiveTeam(id) {
   hideReport();
 }
 
+// ---- Two views on one page: the team editor and the report. The report has its own history entry
+// (#report), so the browser's Back button and the "Back to team editor" buttons both return to the editor
+// with the team exactly as it was. ----
+let reportReady = false; // a report for the current, unedited team has been rendered
+let editorScroll = 0;
+
+function showView(view) {
+  const report = view === "report" && reportReady;
+  document.getElementById("editorView").hidden = report;
+  document.getElementById("analysisSection").hidden = !report;
+  document.getElementById("viewReportBtn").hidden = report || !reportReady;
+  document.title = report ? `Report: ${team.name} · Pokémon Team Synergy Analyzer` : "Pokémon Team Synergy Analyzer";
+  if (report) {
+    window.scrollTo(0, 0);
+    document.getElementById("analysisSection").focus({ preventScroll: true });
+  } else {
+    window.scrollTo(0, editorScroll);
+  }
+}
+function openReport() {
+  editorScroll = window.scrollY;
+  if (location.hash !== "#report") history.pushState({ view: "report" }, "", "#report");
+  showView("report");
+}
+function backToEditor() {
+  if (history.state && history.state.view === "report") history.back(); // fires popstate -> editor
+  else { history.replaceState(null, "", location.pathname + location.search); showView("editor"); }
+}
+// A reload or bookmark of #report has no report to show: start in the editor
+if (location.hash === "#report") history.replaceState(null, "", location.pathname + location.search);
+window.addEventListener("popstate",() => showView(location.hash === "#report" ? "report" : "editor"));
+document.querySelectorAll("[data-back-to-editor]").forEach(b => b.addEventListener("click", backToEditor));
+document.getElementById("viewReportBtn").addEventListener("click", openReport);
+
 function hideReport() {
-  const section = document.getElementById("analysisSection");
-  if (section) section.hidden = true;
+  reportReady = false;
+  if (document.getElementById("editorView").hidden) backToEditor();
+  else showView("editor");
 }
 
-// Any edit makes an existing report out of date: hide it, save and re-check the rules
+// Any edit makes an existing report out of date: drop it, save and re-check the rules
 function onTeamEdited() {
-  const section = document.getElementById("analysisSection");
-  if (section && !section.hidden) {
-    section.hidden = true;
+  if (reportReady) {
+    reportReady = false;
+    document.getElementById("viewReportBtn").hidden = true;
     setStatus("Team changed. Run the analysis again to refresh the report.");
   }
   saveStore();
@@ -959,10 +994,12 @@ document.getElementById("analyzeBtn").addEventListener("click", async () => {
       limitations: PokeFormats.limitations(currentFormat()),
       threats
     });
+    document.getElementById("reportTeam").innerHTML = filled.map(s =>
+      `<span class="report-member">${spriteImg(s.sprite, 40)}<span>${esc(formatName(s.name))}</span></span>`).join("");
+    document.getElementById("reportFormat").textContent = `${t.name} · ${document.getElementById("reportFormat").textContent}`;
     setStatus("");
-    const section = document.getElementById("analysisSection");
-    section.hidden = false;
-    section.scrollIntoView({ behavior: "smooth" });
+    reportReady = true;
+    openReport();
   } catch (err) {
     console.error(err);
     setStatus("The analysis failed. Check your connection and try again.");

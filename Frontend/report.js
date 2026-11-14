@@ -10,10 +10,50 @@ const Report = (function () {
 
   const names = list => list.map(formatName).join(", ");
 
-  function typeList(entries, verb, emptyText) {
-    if (!entries.length) return `<li>${emptyText}</li>`;
-    return entries.map(e => `<li><strong>${esc(formatName(e.type))}</strong> — ${e.count} member${e.count > 1 ? "s" : ""} ${verb}<span class="evidence">${esc(names(e.names))}</span></li>`).join("");
+  // Attacking types down the side, team members across the top, multiplier in each cell
+  const MULT_LABEL = { 0: "0", 0.25: "¼", 0.5: "½", 1: "", 2: "2×", 4: "4×" };
+  const multClass = (m) => m === 0 ? "immune" : m >= 4 ? "quad" : m > 1 ? "weak" : m <= 0.25 ? "dresist" : m < 1 ? "resist" : "";
+  function typeChart(result) {
+    const members = result.members || [];
+    const types = Object.keys(result.summary);
+    const head = `<tr><th scope="col" class="tc-type">Type</th>${members.map(m =>
+      `<th scope="col" title="${esc(formatName(m.name))}">${UI.spriteImg(m.sprite, 32)}<span class="tc-name">${esc(formatName(m.name))}</span></th>`).join("")}<th scope="col">Weak</th><th scope="col">Resist</th></tr>`;
+    const rows = types.map(t => {
+      const s = result.summary[t];
+      const answered = s.resist + s.immune;
+      const problem = s.weak >= 2 && answered === 0;
+      const cells = (s.mults || []).map((m, i) => {
+        const label = MULT_LABEL[m] !== undefined ? MULT_LABEL[m] : `${m}×`;
+        const desc = m === 0 ? "immune" : m === 1 ? "neutral" : `takes ${m}×`;
+        return `<td class="tc-cell ${multClass(m)}" aria-label="${esc(formatName(members[i] ? members[i].name : ""))}: ${desc}">${label}</td>`;
+      }).join("");
+      return `<tr class="${problem ? "tc-problem" : ""}"><th scope="row" class="tc-type">${pill(t)}</th>${cells}` +
+        `<td class="tc-count ${s.weak >= 2 ? "bad" : ""}">${s.weak || ""}</td><td class="tc-count ${answered ? "good" : ""}">${answered || ""}</td></tr>`;
+    }).join("");
+    return `<table class="type-chart"><thead>${head}</thead><tbody>${rows}</tbody></table>
+      <p class="tc-legend"><span class="tc-cell quad">4×</span><span class="tc-cell weak">2×</span><span class="tc-cell resist">½</span><span class="tc-cell dresist">¼</span><span class="tc-cell immune">0</span> blank = neutral · "Resist" counts resistances and immunities</p>`;
   }
+
+  // Report tabs (arrow keys move between them, as in the editor)
+  function selectTab(id, focus) {
+    document.querySelectorAll(".report-tabs [role=tab]").forEach(tab => {
+      const on = tab.id === id;
+      tab.setAttribute("aria-selected", on);
+      tab.tabIndex = on ? 0 : -1;
+      document.getElementById(tab.getAttribute("aria-controls")).hidden = !on;
+      if (on && focus) tab.focus();
+    });
+  }
+  const tabs = () => Array.from(document.querySelectorAll(".report-tabs [role=tab]"));
+  document.querySelectorAll(".report-tabs [role=tab]").forEach(tab => {
+    tab.addEventListener("click", () => selectTab(tab.id));
+    tab.addEventListener("keydown", (e) => {
+      const list = tabs(), i = list.indexOf(tab);
+      const next = e.key === "ArrowRight" ? list[(i + 1) % list.length] : e.key === "ArrowLeft" ? list[(i - 1 + list.length) % list.length]
+        : e.key === "Home" ? list[0] : e.key === "End" ? list[list.length - 1] : null;
+      if (next) { e.preventDefault(); selectTab(next.id, true); }
+    });
+  });
 
   function scoreColor(score) { return score < 40 ? "red" : score < 70 ? "amber" : ""; }
 
@@ -53,12 +93,8 @@ const Report = (function () {
     set("coveredTypesGrid", cov.covered.map(t => pill(t)).join("") || "<span class='sub-text'>None</span>");
     set("uncoveredTypesGrid", cov.uncovered.map(t => pill(t, "uncovered")).join(""));
 
-    // Defense
-    set("weaknessesList", typeList(result.weaknesses, "weak", "No weaknesses."));
-    set("resistancesList", typeList(result.resistances, "resist", "No resistances."));
-    set("immunitiesList", result.immunities.length
-      ? result.immunities.map(e => `<li><strong>${esc(formatName(e.type))}</strong> — ${e.count} immune${result.summary[e.type].viaAbilityOrItem ? ` (${result.summary[e.type].viaAbilityOrItem} via ability or item)` : ""}<span class="evidence">${esc(names(e.names))}</span></li>`).join("")
-      : "<li>No immunities.</li>");
+    // Defense: one compact chart instead of separate weakness / resistance / immunity lists
+    set("typeChart", typeChart(result));
     set("sharedWeakList", result.shared.length
       ? result.shared.map(s => `<li><strong>${esc(formatName(s.type))}</strong> hits ${s.weakNames.length}: ${esc(names(s.weakNames))}<span class="evidence">${s.answers.length ? "Can take it: " + esc(names(s.answers)) : "Nothing on the team resists or is immune to it."}</span></li>`).join("")
       : "<li>No type hits two or more members super-effectively.</li>");
@@ -68,8 +104,14 @@ const Report = (function () {
     if (via && via.members.length) {
       setText("viabilityIntro", `Team average ${via.score}/100. Each Pokémon is graded on base stats compared with the format's most-used Pokémon, being fully evolved (or holding Eviolite), its strongest attack, moves that earn their slot, an item that helps it, and EV investment.`);
       set("viabilityList", via.members.slice().sort((a, b) => a.score - b.score).map(p => `
-        <li><strong>${esc(formatName(p.name))}</strong> — ${p.score}/100${p.unevolved ? " · not fully evolved" : ""}
-          <span class="evidence">${p.issues.length ? esc(p.issues.join("; ")) : "No problems found."}</span></li>`).join(""));
+        <li class="viability-row">
+          <div class="viability-head">
+            <strong>${esc(formatName(p.name))}</strong>
+            <div class="bar-track" role="img" aria-label="${esc(formatName(p.name))}: ${p.score} out of 100"><div class="bar-fill ${scoreColor(p.score)}" style="width:${p.score}%"></div></div>
+            <span class="metric-val">${p.score}</span>
+          </div>
+          <span class="evidence">${p.issues.length ? esc(p.issues.join("; ")) : "No problems found."}</span>
+        </li>`).join(""));
     } else {
       setText("viabilityIntro", "");
       set("viabilityList", "");
@@ -97,6 +139,14 @@ const Report = (function () {
 
     set("assumptionsList", result.assumptions.concat(ctx.limitations).map(a => `<li>${esc(a)}</li>`).join(""));
     renderThreats(ctx.threats);
+    // Show counts on the tabs so the important ones stand out, and start every new report on Summary
+    const high = result.observations.filter(o => o.priority === "high").length;
+    document.getElementById("rtab-summary").textContent = `Summary${result.observations.length ? ` (${result.observations.length})` : ""}`;
+    document.getElementById("rtab-summary").classList.toggle("alert", high > 0);
+    const t = ctx.threats && ctx.threats.result;
+    document.getElementById("rtab-threats").textContent = t ? `Threats (${t.summary.high} high)` : "Threats";
+    document.getElementById("rtab-threats").classList.toggle("alert", !!(t && t.summary.high));
+    selectTab("rtab-summary");
   }
 
   const pct = (x) => `${Math.round(x * 1000) / 10}%`;

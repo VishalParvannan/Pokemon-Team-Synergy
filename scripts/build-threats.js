@@ -3,12 +3,12 @@
 // most common set, from Smogon usage statistics as republished by pkmn/smogon (data.pkmn.cc).
 // The app reads these small snapshots instead of downloading the multi-megabyte stats files.
 //
-// Usage: node scripts/build-threats.js [formatId ...]   (default: gen1ou..gen9ou and gen9doublesou)
+// Usage: node scripts/build-threats.js [formatId ...]   (default: gen1ou..gen9ou, gen9doublesou and gen9vgc2026)
 const fs = require("fs");
 const path = require("path");
 
 const TOP_N = 40;
-const DEFAULT_FORMATS = ["gen9ou", "gen8ou", "gen7ou", "gen6ou", "gen5ou", "gen4ou", "gen3ou", "gen2ou", "gen1ou", "gen9doublesou"];
+const DEFAULT_FORMATS = ["gen9ou", "gen8ou", "gen7ou", "gen6ou", "gen5ou", "gen4ou", "gen3ou", "gen2ou", "gen1ou", "gen9doublesou", "gen9vgc2026"];
 const OUT_DIR = path.join(__dirname, "..", "Frontend", "data", "threats");
 const STAT_ORDER = ["hp", "atk", "def", "spa", "spd", "spe"];
 

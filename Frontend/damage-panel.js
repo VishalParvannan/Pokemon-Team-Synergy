@@ -95,7 +95,7 @@ const DamagePanel = (function () {
     let defender;
     if (state.defender === "other") {
       if (!state.other) { out.innerHTML = "<p>Search for a defending Pokémon.</p>"; return; }
-      defender = D.hypotheticalSlot(state.other, state.spread, 100);
+      defender = D.hypotheticalSlot(state.other, state.spread, deps.getLevelCap ? deps.getLevelCap() || 100 : 100);
     } else {
       defender = slots[+state.defender.slice(5)];
     }

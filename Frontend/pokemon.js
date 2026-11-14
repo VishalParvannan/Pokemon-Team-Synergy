@@ -35,6 +35,16 @@ const slots = () => team.slots;
 const currentFormat = () => findFormat(team.format.id);
 // A slot's types in the current format's generation (e.g. Clefable is Normal before Gen 6)
 const eraTypes = (slot) => PokeLogic.typesInGen(slot.types, slot.pastTypes, currentFormat().era);
+// ...and its base stats in that generation (e.g. Gen 1's single Special, stats before the Gen 6 buffs)
+const eraStats = (slot) => PokeLogic.statsInGen(slot.stats, slot.pastStats, currentFormat().era);
+const oldStatSystem = () => { const e = currentFormat().era; return e !== null && e <= 2; };
+// A slot as it battles in this format: the generation's types and base stats, and the format's level cap
+// (VGC scales everything above level 50 down to 50)
+function battleSlot(slot) {
+  const cap = currentFormat().levelCap;
+  return { ...slot, types: eraTypes(slot), stats: eraStats(slot), level: cap ? Math.min(slot.level, cap) : slot.level };
+}
+const battleStats = (slot) => calcAllStats(battleSlot(slot), currentFormat().era);
 
 // ---- Persistence (local only, versioned; the old single-team keys are read but never deleted) ----
 function loadStore() {
@@ -79,6 +89,7 @@ let editorScroll = 0;
 
 function showView(view) {
   const report = view === "report" && reportReady;
+  const wasReport = !document.getElementById("analysisSection").hidden;
   document.getElementById("editorView").hidden = report;
   document.getElementById("analysisSection").hidden = !report;
   document.getElementById("viewReportBtn").hidden = report || !reportReady;
@@ -88,6 +99,8 @@ function showView(view) {
     document.getElementById("analysisSection").focus({ preventScroll: true });
   } else {
     window.scrollTo(0, editorScroll);
+    // Keyboard and screen-reader users land back on the button they used to open the report
+    if (wasReport) document.getElementById(reportReady ? "viewReportBtn" : "analyzeBtn").focus({ preventScroll: true });
   }
 }
 function openReport() {
@@ -158,6 +171,7 @@ function applyParsed(slot, parsed) {
   slot.sprite = parsed.sprite;
   slot.types = parsed.types.filter(t => ALL_TYPES.includes(t));
   slot.pastTypes = parsed.pastTypes || [];
+  slot.pastStats = parsed.pastStats || [];
   slot.abilities = parsed.abilities.map(a => a.name);
   slot.hiddenAbilities = parsed.abilities.filter(a => a.hidden).map(a => a.name);
   STAT_KEYS.forEach(k => { if (parsed.stats[k]) slot.stats[k] = parsed.stats[k]; });
@@ -202,10 +216,11 @@ async function initApp() {
   const shareNotice = await openSharedTeam();
   const hydrated = hydrateTeam(); // marks slots as loading before the first render
   DamagePanel.init({
-    getSlots: () => slots(),
+    getSlots: () => slots().map(s => (s.name ? battleSlot(s) : s)), // types, base stats and level as in the format
     getGenNum: () => currentFormat().era || 9,
     getPokemonList: () => pokemonCache,
-    isDoubles: () => isDoubles()
+    isDoubles: () => isDoubles(),
+    getLevelCap: () => currentFormat().levelCap || null
   });
   renderAll();
   await Promise.all([
@@ -268,19 +283,39 @@ function renderFormatControls() {
     });
     select.appendChild(optgroup);
   });
-  onlyLabel.hidden = !format.gen;
+  onlyLabel.hidden = !format.gen || !!format.doubles; // official rule sets have a fixed species list
   onlyBox.checked = team.format.introducedOnly;
-  document.getElementById("battleStyle").value = team.format.doubles ? "doubles" : "singles";
+  const style = document.getElementById("battleStyle");
+  style.value = isDoubles() ? "doubles" : "singles";
+  style.disabled = !!format.doubles; // VGC is always doubles
+  style.title = format.doubles ? `${format.name} is always played in doubles.` : "";
   document.getElementById("formatNote").textContent = format.description;
 }
 
 function changeFormat(update) {
+  const before = currentFormat();
   Object.assign(team.format, update);
+  const format = currentFormat();
+  if (format.doubles) { team.format.doubles = true; team.format.introducedOnly = false; }
+  // Level-capped formats (VGC: 50) bring the team's levels down to the cap; leaving one restores the usual
+  // level 100 for Pokémon that were at the cap. The status line says what changed.
+  let levelNote = "";
+  if (format.levelCap && format.levelCap !== before.levelCap) {
+    const changed = slots().filter(s => s.name && s.level > format.levelCap);
+    changed.forEach(s => { s.level = format.levelCap; });
+    if (changed.length) levelNote = `${format.name} is played at level ${format.levelCap}: ${changed.length} Pokémon set to level ${format.levelCap}.`;
+  } else if (!format.levelCap && before.levelCap) {
+    const changed = slots().filter(s => s.name && s.level === before.levelCap);
+    changed.forEach(s => { s.level = 100; });
+    if (changed.length) levelNote = `${changed.length} Pokémon set back to level 100, the usual level outside ${before.name}.`;
+  }
   slots().forEach(recomputePool);
   renderFormatControls();
   onTeamEdited();
   renderTabs();
-  loadLists();
+  renderTabContent();
+  if (levelNote) setStatus(levelNote);
+  loadLists().then(() => { if (levelNote) setStatus(levelNote); }); // the list load resets the status line
 }
 document.getElementById("formatSelect").addEventListener("change", (e) => changeFormat({ id: e.target.value }));
 document.getElementById("introducedOnly").addEventListener("change", (e) => changeFormat({ introducedOnly: e.target.checked }));
@@ -435,7 +470,7 @@ function renderOverview(container) {
     if (slot.name) {
       card.className = "overview-card";
       card.style.borderTop = `4px solid ${UI.TYPE_COLORS[slot.types[0]] || "var(--accent)"}`;
-      const calc = calcAllStats(slot);
+      const calc = battleStats(slot);
       card.innerHTML = `
         <div class="card-head">
           <div>
@@ -445,9 +480,9 @@ function renderOverview(container) {
           ${spriteImg(slot.sprite, 64)}
         </div>
         <div class="card-body">
-          <div><strong>Lv ${slot.level}</strong> · ${esc(formatName(slot.nature))} · Spe ${calc.spe}</div>
-          <div><strong>Item:</strong> ${slot.item ? esc(formatName(slot.item)) : "None"}</div>
-          <div><strong>Ability:</strong> ${slot.ability ? esc(formatName(slot.ability)) : "None"}</div>
+          <div><strong>Lv ${slot.level}</strong>${oldStatSystem() ? "" : ` · ${esc(formatName(slot.nature))}`} · Spe ${calc.spe}</div>
+          ${currentFormat().era === 1 ? "" : `<div><strong>Item:</strong> ${slot.item ? esc(formatName(slot.item)) : "None"}</div>`}
+          ${oldStatSystem() ? "" : `<div><strong>Ability:</strong> ${slot.ability ? esc(formatName(slot.ability)) : "None"}</div>`}
           <div><strong>Moves:</strong> ${esc(slot.moves.filter(Boolean).map(formatName).join(", ")) || "None"}</div>
         </div>`;
     } else {
@@ -464,6 +499,7 @@ function renderOverview(container) {
 function renderPokemonEditor(container, slotIdx) {
   const slot = slots()[slotIdx];
   const era = currentFormat().era;
+  const oldGen = oldStatSystem();
   const editor = document.createElement("div");
   editor.className = "pokemon-editor";
 
@@ -484,18 +520,33 @@ function renderPokemonEditor(container, slotIdx) {
       ${slot.species && slot.species !== slot.name ? `<div class="field-hint">Form of ${esc(formatName(slot.species))}</div>` : ""}`;
     leftCol.appendChild(preview);
 
-    leftCol.appendChild(createDropdown("Ability", slot.abilities, slot.ability, (val) => { slot.ability = val || null; onTeamEdited(); renderTabContent(); }, { hidden: slot.hiddenAbilities }));
-    leftCol.appendChild(createSearchBox("Item", itemCache, slot.item, (val) => { slot.item = val || null; onTeamEdited(); renderTabContent(); }, true,
-      itemCache.length ? "Battle items only (held items, berries, stones, plates, orbs)." : "Item list is still loading."));
-    leftCol.appendChild(createNumberField("Level", slot.level, 1, 100, (v) => { slot.level = v; onTeamEdited(); renderTabContent(); }));
+    const hint =(text) => { const p = document.createElement("p"); p.className = "field-hint era-note"; p.textContent = text; return p; };
+    if (oldGen) {
+      // Gen 1-2 had no abilities or natures (and Gen 1 no held items); the controls are replaced by a note
+      leftCol.appendChild(hint(era === 1
+        ? "Generation 1 has no abilities, natures or held items."
+        : "Generation 2 has no abilities or natures."));
+    } else {
+      leftCol.appendChild(createDropdown("Ability", slot.abilities, slot.ability, (val) => { slot.ability = val || null; onTeamEdited(); renderTabContent(); }, { hidden: slot.hiddenAbilities }));
+    }
+    if (era !== 1) {
+      leftCol.appendChild(createSearchBox("Item", itemCache, slot.item, (val) => { slot.item = val || null; onTeamEdited(); renderTabContent(); }, true,
+        itemCache.length ? "Battle items only (held items, berries, stones, plates, orbs)." : "Item list is still loading."));
+    }
+    const cap = currentFormat().levelCap;
+    const levelField = createNumberField("Level", slot.level, 1, cap || 100, (v) => { slot.level = v; onTeamEdited(); renderTabContent(); });
+    if (cap) levelField.appendChild(hint(`${currentFormat().name} is played at level ${cap} (the maximum here).`));
+    leftCol.appendChild(levelField);
 
-    const natureBox = createDropdown("Nature", Object.keys(NATURES), slot.nature, (val) => { slot.nature = val || "hardy"; onTeamEdited(); renderTabContent(); });
-    const natureNote = document.createElement("div");
-    natureNote.className = "field-hint";
-    const nat = NATURES[slot.nature];
-    natureNote.textContent = nat ? `+${nat[0].toUpperCase()}, −${nat[1].toUpperCase()}` : "Neutral";
-    natureBox.appendChild(natureNote);
-    leftCol.appendChild(natureBox);
+    if (!oldGen) {
+      const natureBox = createDropdown("Nature", Object.keys(NATURES), slot.nature, (val) => { slot.nature = val || "hardy"; onTeamEdited(); renderTabContent(); });
+      const natureNote = document.createElement("div");
+      natureNote.className = "field-hint";
+      const nat = NATURES[slot.nature];
+      natureNote.textContent = nat ? `+${nat[0].toUpperCase()}, −${nat[1].toUpperCase()}` : "Neutral";
+      natureBox.appendChild(natureNote);
+      leftCol.appendChild(natureBox);
+    }
 
     const del = document.createElement("button");
     del.type = "button";
@@ -541,62 +592,98 @@ function renderPokemonEditor(container, slotIdx) {
 
     const statsContainer = document.createElement("div");
     statsContainer.className = "stat-sliders";
+    // Gen 1-2: stat experience (shown on the EV scale, 0-252, no total cap), DVs 0-15 with the HP DV derived from
+    // the others, and one Special stat (Gen 1) or Special Attack/Defense sharing one stat experience and DV (Gen 2)
+    const gen = era;
+    const base = eraStats(slot);
+    const ivLabel = oldGen ? "DV" : "IV";
+    const ivMax = oldGen ? 15 : MAX_IV;
+    const ivShown = (k) => oldGen ? (k === "hp" ? PokeLogic.hpDv(slot.ivs) : PokeLogic.ivToDv(slot.ivs[k])) : slot.ivs[k];
+    const rows = oldGen && gen === 1
+      ? STATS.filter(s => s.key !== "spd").map(s => s.key === "spa" ? { key: "spa", label: "Spc" } : s)
+      : STATS;
     statsContainer.innerHTML = `
       <div class="stats-head">
-        <span class="selector-label">EVs, IVs and calculated stats (Lv ${slot.level})</span>
+        <span class="selector-label">${oldGen ? "Stat experience (as EVs), DVs" : "EVs, IVs"} and calculated stats (Lv ${slot.level})</span>
         <span data-ev-total class="ev-total"></span>
       </div>
+      ${oldGen ? `<p class="field-hint era-note">Generation ${gen} stats: stat experience is shown on the 0–252 EV scale with no total cap, DVs run 0–15 and the HP DV follows from the others${gen === 2 ? ", and Special Attack and Special Defense share one stat experience and DV" : ""}.</p>` : ""}
       <div class="stat-row stat-head" aria-hidden="true">
-        <span></span><span>Base</span><span>Calc</span><span>EV</span><span></span><span>IV</span>
+        <span></span><span>Base</span><span>Calc</span><span>${oldGen ? "Exp" : "EV"}</span><span></span><span>${ivLabel}</span>
       </div>
       <div role="status" aria-live="polite" data-ev-msg class="ev-msg"></div>`;
     const totalSpan = statsContainer.querySelector("[data-ev-total]");
     const msgEl = statsContainer.querySelector("[data-ev-msg]");
-    const refreshTotals = () => { totalSpan.textContent = `${evTotal(slot.evs)} / ${MAX_EV_TOTAL} EVs used`; };
+    const refreshTotals = () => {
+      totalSpan.textContent = oldGen ? "No total cap before Generation 3" : `${evTotal(slot.evs)} / ${MAX_EV_TOTAL} EVs used`;
+    };
     refreshTotals();
 
     const calcCells = {};
+    const ivInputs = {};
     const refreshCalc = () => {
-      const calc = calcAllStats(slot);
-      STATS.forEach(s => { calcCells[s.key].textContent = calc[s.key]; });
+      const calc = battleStats(slot);
+      rows.forEach(s => { calcCells[s.key].textContent = calc[s.key]; });
+      if (oldGen) Object.entries(ivInputs).forEach(([k, input]) => { input.value = ivShown(k); });
     };
 
-    STATS.forEach(s => {
+    rows.forEach(s => {
+      // Gen 2 Special Defense mirrors Special Attack's stat experience and DV, so its inputs are read-only
+      const mirrored = oldGen && s.key === "spd";
+      const derived = oldGen && s.key === "hp"; // HP DV
       const row = document.createElement("div");
       row.className = "stat-row";
       row.innerHTML = `
         <span class="stat-name">${s.label}</span>
-        <span title="Base stat">${slot.stats[s.key]}</span>
+        <span title="Base stat">${base[s.key]}</span>
         <span data-calc class="stat-calc" title="Calculated stat"></span>
-        <input type="range" class="ev-slider" aria-label="${s.label} EVs slider" min="0" max="${MAX_EV_STAT}" step="4" value="${slot.evs[s.key]}" />
-        <input type="number" class="ev-input" aria-label="${s.label} EVs" min="0" max="${MAX_EV_STAT}" value="${slot.evs[s.key]}" />
-        <input type="number" class="ev-input iv-input" aria-label="${s.label} IVs" min="0" max="${MAX_IV}" value="${slot.ivs[s.key]}" />`;
+        <input type="range" class="ev-slider" aria-label="${s.label} ${oldGen ? "stat experience" : "EVs"} slider" min="0" max="${MAX_EV_STAT}" step="4" value="${slot.evs[s.key]}" ${mirrored ? "disabled" : ""} />
+        <input type="number" class="ev-input" aria-label="${s.label} ${oldGen ? "stat experience" : "EVs"}" min="0" max="${MAX_EV_STAT}" value="${slot.evs[s.key]}" ${mirrored ? "disabled title=\"Shared with Special Attack\"" : ""} />
+        <input type="number" class="ev-input iv-input" aria-label="${s.label} ${ivLabel}s" min="0" max="${ivMax}" value="${ivShown(s.key)}" ${mirrored || derived ? `disabled title="${derived ? "Derived from the other DVs" : "Shared with Special Attack"}"` : ""} />`;
       calcCells[s.key] = row.querySelector("[data-calc]");
       const slider = row.querySelector(".ev-slider");
       const numInput = row.querySelector("input.ev-input:not(.iv-input)");
       const ivInput = row.querySelector(".iv-input");
+      ivInputs[s.key] = ivInput;
+      const mirror = oldGen && s.key === "spa"; // keep Special Defense equal to Special Attack
 
       const updateEV = (val) => {
-        const { value, message } = clampEv(slot.evs, s.key, val);
+        const { value, message } = clampEv(slot.evs, s.key, val, gen);
         slot.evs[s.key] = value;
+        if (mirror) slot.evs.spd = value;
         slider.value = value;
         numInput.value = value;
         msgEl.textContent = message;
         refreshTotals();
         refreshCalc();
+        if (mirror && gen === 2) renderMirrored();
         onTeamEdited();
       };
       slider.oninput = (e) => updateEV(e.target.value);
       numInput.oninput = (e) => { if (e.target.value !== "") updateEV(e.target.value); };
       numInput.onblur = () => updateEV(numInput.value);
       ivInput.onchange = () => {
-        slot.ivs[s.key] = clampInt(ivInput.value, 0, MAX_IV);
-        ivInput.value = slot.ivs[s.key];
+        if (oldGen) {
+          // A DV of d is stored as IV 2d+1, so DV 15 stays IV 31 (Showdown treats both as DV 15)
+          const dv = clampInt(ivInput.value, 0, 15);
+          slot.ivs[s.key] = dv * 2 + 1;
+          if (mirror) slot.ivs.spd = slot.ivs.spa;
+        } else {
+          slot.ivs[s.key] = clampInt(ivInput.value, 0, MAX_IV);
+          ivInput.value = slot.ivs[s.key];
+        }
         refreshCalc();
+        if (mirror && gen === 2) renderMirrored();
         onTeamEdited();
       };
       statsContainer.appendChild(row);
     });
+    const renderMirrored = () => {
+      const spdRow = ivInputs.spd && ivInputs.spd.closest(".stat-row");
+      if (!spdRow) return;
+      spdRow.querySelector(".ev-slider").value = slot.evs.spd;
+      spdRow.querySelector("input.ev-input:not(.iv-input)").value = slot.evs.spd;
+    };
     refreshCalc();
     rightCol.appendChild(movesContainer);
     rightCol.appendChild(statsContainer);
@@ -610,8 +697,16 @@ function newSlotFrom(name, parsed) {
   const slot = PokeTeam.createEmptySlot();
   slot.name = name;
   applyParsed(slot, parsed);
-  const visible = slot.abilities.filter(a => !slot.hiddenAbilities.includes(a));
-  slot.ability = visible[0] || slot.abilities[0] || null;
+  const format = currentFormat();
+  if (oldStatSystem()) {
+    // Gen 1-2: no abilities or natures; sets normally have maximum stat experience (as in Showdown)
+    slot.ability = null;
+    STAT_KEYS.forEach(k => { slot.evs[k] = MAX_EV_STAT; });
+  } else {
+    const visible = slot.abilities.filter(a => !slot.hiddenAbilities.includes(a));
+    slot.ability = visible[0] || slot.abilities[0] || null;
+  }
+  if (format.defaultLevel) slot.level = format.defaultLevel;
   return slot;
 }
 
@@ -685,6 +780,10 @@ async function generateRandomTeam() {
     try {
       const parsed = await PokeApi.getPokemon(name);
       if (usedSpecies.has(parsed.species)) continue;
+      // Official rule sets: no mythicals, and no more restricted legendaries than allowed
+      if (format.bannedSpecies && format.bannedSpecies.includes(parsed.species)) continue;
+      if (format.restricted && format.restricted.species.includes(parsed.species)
+        && generated.filter(g => format.restricted.species.includes(g.species)).length >= format.restricted.max) continue;
       const slot = newSlotFrom(name, parsed);
       if (!slot.movePool.length) continue; // no learnset in this format's games: skip rather than build an unverifiable set
 
@@ -731,6 +830,9 @@ async function generateRandomTeam() {
       const spread = PokeViability.randomSpread(picked.category, slot.stats);
       slot.nature = spread.nature;
       STAT_KEYS.forEach(k => { slot.ivs[k] = 31; slot.evs[k] = spread.evs[k] || 0; });
+      // Gen 1-2: no natures, and every stat gets maximum stat experience
+      if (era !== null && era <= 2) { slot.nature = "hardy"; STAT_KEYS.forEach(k => { slot.evs[k] = MAX_EV_STAT; }); }
+      if (format.defaultLevel) slot.level = format.defaultLevel;
 
       // Keep the set only if it passes the same rule checks the builder shows
       const facts = { itemList: new Set(itemCache), megaStones, itemGen: {}, abilityGen: {} };
@@ -883,7 +985,7 @@ async function importShowdown(text) {
       if (k in mon.evs) slot.evs[k] = clampInt(mon.evs[k], 0, MAX_EV_STAT);
       if (k in mon.ivs) slot.ivs[k] = clampInt(mon.ivs[k], 0, MAX_IV);
     });
-    if (evTotal(slot.evs) > MAX_EV_TOTAL) { STAT_KEYS.forEach(k => { slot.evs[k] = 0; }); notes.push(`${formatName(name)} had more than ${MAX_EV_TOTAL} EVs; EVs were reset.`); }
+    if (!oldStatSystem() && evTotal(slot.evs) > MAX_EV_TOTAL) { STAT_KEYS.forEach(k => { slot.evs[k] = 0; }); notes.push(`${formatName(name)} had more than ${MAX_EV_TOTAL} EVs; EVs were reset.`); }
     slot.moves = [0, 1, 2, 3].map(j => mon.moves[j] || null);
     imported.slots[used++] = slot;
   }
@@ -924,7 +1026,7 @@ function loadSnapshot(id) {
   return snapshotCache.get(id);
 }
 
-const SNAPSHOT_LABELS = { gen9doublesou: "Gen 9 Doubles OU" };
+const SNAPSHOT_LABELS = { gen9doublesou: "Gen 9 Doubles OU", gen9vgc2026: "VGC 2026 (Scarlet/Violet)" };
 async function computeThreats(members) {
   try { await CalcLoader.ensure(); } catch (err) { /* reported below */ }
   if (!window.PokeThreats || !CalcLoader.ready()) return { error: "The damage calculator did not load, so threats were not analyzed." };
@@ -934,7 +1036,7 @@ async function computeThreats(members) {
   try {
     const snapshot = await loadSnapshot(id);
     const started = performance.now();
-    const result = window.PokeThreats.analyzeThreats(currentFormat().era || 9, snapshot, members, { doubles: isDoubles() });
+    const result = window.PokeThreats.analyzeThreats(currentFormat().era || 9, snapshot, members, { doubles: isDoubles(), level: currentFormat().levelCap || null });
     appPerf.lastThreatAnalysisMs = Math.round(performance.now() - started);
     return { result, snapshot, label };
   } catch (err) {
@@ -948,7 +1050,7 @@ async function loadViabilitySnapshot() {
   const id = window.PokeThreats ? window.PokeThreats.snapshotFor(currentFormat(), false) : null;
   try { return id ? await loadSnapshot(id) : null; } catch (err) { return null; }
 }
-const isDoubles = () => !!(team && team.format.doubles);
+const isDoubles = () => !!(team && (team.format.doubles || currentFormat().doubles));
 
 // ---- Analysis ----
 document.getElementById("analyzeBtn").addEventListener("click", async () => {
@@ -967,12 +1069,12 @@ document.getElementById("analyzeBtn").addEventListener("click", async () => {
     renderValidation();
 
     setStatus("Checking matchups against the most-used Pokémon…");
-    const threats = await computeThreats(filled);
+    const threats = await computeThreats(filled.map(battleSlot));
     if (team !== t) return;
     // The threat-matchup score component needs the threat results; without usage data it is left out
     const threat = threats.result ? window.PokeThreats.threatScore(threats.result, threats.snapshot) : null;
     // Type analysis uses the format's generation chart and each Pokémon's types in that generation
-    const members = filled.map(s => ({ ...s, types: eraTypes(s) }));
+    const members = filled.map(battleSlot);
     // Viability compares each Pokémon with the format's most-used ones (species data from the calculator)
     const genNum = currentFormat().era || 9;
     const D = window.PokeDamage && window.PokeDamage.available ? window.PokeDamage : null;

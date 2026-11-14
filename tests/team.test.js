@@ -23,9 +23,21 @@ test("sanitizeSlot rejects bad data and clamps numbers", () => {
   assert.deepEqual(s.moves, [null, "earthquake", null, null]);
 });
 
-test("sanitizeSlot zeroes EVs that exceed the 510 cap", () => {
-  const s = T.sanitizeSlot({ name: "x", evs: { hp: 252, atk: 252, def: 252 } });
-  assert.equal(Object.values(s.evs).reduce((a, b) => a + b, 0), 0);
+test("EV totals above 510 are kept on load (legal in Gen 1-2) and flagged by the rule checks from Gen 3", () => {
+  const s = T.sanitizeSlot({ name: "x", evs: { hp: 252, atk: 252, def: 252, spa: 300 } });
+  assert.equal(Object.values(s.evs).reduce((a, b) => a + b, 0), 1008); // per-stat cap of 252 still applies
+  const slot = mon("snorlax", { evs: { hp: 252, atk: 252, def: 252, spa: 252, spd: 252, spe: 252 } });
+  const fmt = (era) => ({ name: `Generation ${era}`, era, clauses: true });
+  const errors = (era) => T.validateTeam([slot], { format: fmt(era), allowedNames: null }).issues.filter(i => /EVs; the cap/.test(i.text));
+  assert.equal(errors(2).length, 0);
+  assert.equal(errors(3).length, 1);
+});
+
+test("Gen 1-2 rule checks: natures ignored, Special Attack and Special Defense must match", () => {
+  const slot = mon("snorlax", { nature: "adamant", evs: { hp: 252, atk: 252, def: 252, spa: 252, spd: 100, spe: 252 } });
+  const text = T.validateTeam([slot], { format: { name: "Generation 2", era: 2, clauses: true }, allowedNames: null }).issues.map(i => i.text).join(" ");
+  assert.match(text, /Natures did not exist in Generation 2/);
+  assert.match(text, /share one stat experience and DV/);
 });
 
 test("slots restored from storage have an empty move pool until data loads (editor must not crash)", () => {
@@ -259,7 +271,7 @@ test("formats: version groups and eras", () => {
   assert.equal(F.findFormat("swsh-full").era, 8);
   assert.equal(F.findFormat("unknown-id").id, "any");
   const gen1 = F.limitations(F.findFormat("gen1")).join(" ");
-  assert.match(gen1, /stat system/); // Gen 1-2 stats caveat remains
+  assert.match(gen1, /that generation's system/); // Gen 1-2 stats are described
   assert.doesNotMatch(gen1, /Fairy/); // type charts are now per generation, so no Fairy caveat
 });
 
@@ -291,4 +303,27 @@ test("api parsers: learnsets, pools by version group, move and generation info",
   assert.deepEqual(A.parseMove({ type: { name: "fire" }, damage_class: { name: "special" }, priority: 0, power: 90, target: { name: "all-opponents" } }), { type: "fire", damageClass: "special", priority: 0, power: 90, target: "all-opponents" });
   assert.equal(A.minGeneration([{ generation: { name: "generation-v" } }, { generation: { name: "generation-iii" } }]), 3);
   assert.equal(A.minGeneration([]), null);
+});
+
+test("VGC rules: restricted limit, mythicals, Item Clause error, minimum team size, SV learnset", () => {
+  const vgc = F.findFormat("sv-vgc2026");
+  assert.equal(vgc.levelCap, 50);
+  assert.equal(vgc.doubles, true);
+  const check = (slots) => T.validateTeam(slots, { format: vgc, allowedNames: null });
+  const text = (slots) => check(slots).issues.map(i => i.text).join(" | ");
+  const r = (name, species = name, item = null) => mon(name, { species, item });
+  // Two restricted are fine, three are not (forms count by species)
+  const two = [r("miraidon"), r("calyrex-shadow", "calyrex"), r("incineroar"), r("rillaboom")];
+  assert.doesNotMatch(text(two), /restricted/);
+  assert.match(text([...two, r("kyogre")]), /at most 2 restricted legendary Pokémon; this team has 3 \(Miraidon, Calyrex shadow, Kyogre\)/);
+  assert.match(text([r("mew"), r("a"), r("b"), r("c")]), /Mew is a mythical Pokémon and is banned/);
+  const dupes = check([r("a", "a", "leftovers"), r("b", "b", "leftovers"), r("c"), r("d")]).issues.find(i => /Item Clause/.test(i.text));
+  assert.equal(dupes.severity, "error");
+  assert.match(text([r("a"), r("b")]), /need at least 4 Pokémon/);
+  // A loaded Pokémon with no Scarlet/Violet learnset is flagged
+  assert.match(text([mon("x", { learn: { tackle: ["sword-shield"] }, movePool: [] })]), /no learnset/);
+  // Ordinary generation formats keep duplicate items as a warning and have no team-size rule
+  const g9 = T.validateTeam([r("a", "a", "leftovers"), r("b", "b", "leftovers")], { format: gen9, allowedNames: null }).issues;
+  assert.equal(g9.find(i => /Item Clause/.test(i.text)).severity, "warning");
+  assert.ok(!g9.some(i => /at least/.test(i.text)));
 });

@@ -1,5 +1,6 @@
 // Pure domain logic (no DOM, no network). Works in the browser and in Node tests.
-// Rules modelled: Generation 6+ type chart (with Fairy), Gen 3+ stat formula.
+// Rules modelled: per-generation type charts and base stats; Gen 3+ stat formula with natures, and the
+// Gen 1-2 system (DVs, stat experience, a shared Special stat, no natures).
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
   else root.PokeLogic = factory();
@@ -93,6 +94,38 @@
     return applicable ? applicable.types : currentTypes;
   }
 
+  // A Pokémon's base stats in a given generation. pastStats: [{ gen, stats: { key: value } }] where the values
+  // applied up to and including `gen` (PokeAPI past_stats). Gen 1 had a single Special stat ("spc"), used
+  // for both Special Attack and Special Defense here.
+  function statsInGen(currentStats, pastStats, gen) {
+    const out = Object.assign({}, currentStats);
+    if (!gen || !pastStats || !pastStats.length) return out;
+    const applicable = pastStats.filter(p => gen <= p.gen).sort((a, b) => a.gen - b.gen);
+    STAT_KEYS.concat("spc").forEach(k => {
+      const hit = applicable.find(p => p.stats[k] !== undefined);
+      if (!hit) return;
+      if (k === "spc") { out.spa = hit.stats.spc; out.spd = hit.stats.spc; }
+      else out[k] = hit.stats[k];
+    });
+    if (gen <= 1 && out.spa !== out.spd) out.spd = out.spa; // Gen 1 Special with no past entry: one stat
+    return out;
+  }
+
+  // Gen 1-2: IVs are stored as 0-31 like later games; the game's DV (0-15) is half of it, as in Showdown.
+  const ivToDv = (iv) => Math.floor((iv === undefined ? 31 : iv) / 2);
+  // HP DV is derived from the others' lowest bits
+  function hpDv(ivs) {
+    return (ivToDv(ivs.atk) % 2) * 8 + (ivToDv(ivs.def) % 2) * 4 + (ivToDv(ivs.spe) % 2) * 2 + (ivToDv(ivs.spa) % 2);
+  }
+  // Gen 1-2 stat formula (as in Showdown / @smogon/calc): EVs stand for stat experience ((ev-1)^2+1)
+  function calcStatOld(statKey, base, dv, ev, level) {
+    const statExp = (ev - 1) * (ev - 1) + 1;
+    const core = Math.floor(((2 * (base + dv) + Math.floor((Math.sqrt(statExp - 1) + 1) / 4)) * level) / 100);
+    return statKey === "hp" ? core + level + 10 : core + 5;
+  }
+  // Special Attack and Special Defense share one stat experience and DV before Gen 3 (the Special Attack ones)
+  const SHARED_SPECIAL = (k) => (k === "spd" ? "spa" : k);
+
   function natureModifier(nature, statKey) {
     const n = NATURES[nature];
     if (!n || statKey === "hp") return 1;
@@ -113,8 +146,19 @@
     return Math.floor((core + 5) * natureModifier(nature, statKey));
   }
 
-  function calcAllStats(slot) {
+  // gen: the format's generation; 1-2 use the old system. slot.stats should already be that generation's
+  // base stats (statsInGen).
+  function calcAllStats(slot, gen) {
     const out = {};
+    if (gen && gen <= 2) {
+      const ivs = slot.ivs || {}, evs = slot.evs || {};
+      STAT_KEYS.forEach(k => {
+        const src = SHARED_SPECIAL(k);
+        const dv = k === "hp" ? hpDv(ivs) : ivToDv(ivs[src]);
+        out[k] = calcStatOld(k, slot.stats[k], dv, evs[src] === undefined ? 0 : evs[src], slot.level);
+      });
+      return out;
+    }
     STAT_KEYS.forEach(k => {
       out[k] = calcStat(k, slot.stats[k], slot.ivs[k], slot.evs[k], slot.level, slot.nature, slot.name === "shedinja");
     });
@@ -125,9 +169,13 @@
     return STAT_KEYS.reduce((a, k) => a + (evs[k] || 0), 0);
   }
 
+  // Total EV cap: none before Gen 3 (every stat can have maximum stat experience)
+  const evCapFor = (gen) => (gen && gen <= 2 ? MAX_EV_STAT * STAT_KEYS.length : MAX_EV_TOTAL);
+
   // Returns the EV value allowed for `statKey` given the other stats, plus a message when it was reduced.
-  function clampEv(evs, statKey, requested) {
+  function clampEv(evs, statKey, requested, gen) {
     const wanted = clampInt(requested, 0, MAX_EV_STAT);
+    if (gen && gen <= 2) return { value: wanted, message: parseInt(requested, 10) > MAX_EV_STAT ? `A single stat is capped at ${MAX_EV_STAT}.` : "" };
     const others = evTotal(evs) - (evs[statKey] || 0);
     const room = Math.max(0, MAX_EV_TOTAL - others);
     if (wanted > room) {
@@ -176,8 +224,8 @@
 
   return {
     ALL_TYPES, TYPE_CHART, STAT_KEYS, NATURES, MAX_EV_TOTAL, MAX_EV_STAT, MAX_IV,
-    typesFor, typeChartFor, typesInGen, getDefensiveMultiplier, natureModifier, clampInt, calcStat, calcAllStats,
-    evTotal, clampEv, coveredTypes, dualTypeCoverage, defensiveSummary
+    typesFor, typeChartFor, typesInGen, statsInGen, getDefensiveMultiplier, natureModifier, clampInt, calcStat, calcAllStats,
+    hpDv, ivToDv, evCapFor, evTotal, clampEv, coveredTypes, dualTypeCoverage, defensiveSummary
   };
 });
 

@@ -49,13 +49,13 @@
       slot.ivs[k] = clampInt(saved.ivs && saved.ivs[k], 0, MAX_IV);
       slot.evs[k] = clampInt(saved.evs && saved.evs[k], 0, MAX_EV_STAT);
     });
-    if (evTotal(slot.evs) > MAX_EV_TOTAL) STAT_KEYS.forEach(k => { slot.evs[k] = 0; });
+    // Totals above 510 are kept: they are legal before Gen 3, and the rule checks flag them in later formats
     return slot;
   }
 
   function serializeSlot(slot) {
     if (!slot.name) { const { movePool, ...empty } = createEmptySlot(); return empty; }
-    const { learn, movePool, dataState, pastTypes, ...persisted } = slot;
+    const { learn, movePool, dataState, pastTypes, pastStats, ...persisted } = slot;
     return JSON.parse(JSON.stringify(persisted));
   }
 
@@ -275,9 +275,9 @@
 
   // ---- Validation ----
   const UNCHECKED = [
-    "Tier bans, restricted-legendary limits and other official-rule-set bans.",
+    "Tier bans (restricted legendaries and mythicals are checked only in the VGC format).",
     "Event-only or egg-move combinations, ability availability per species beyond hidden-ability and generation rules.",
-    "Per-generation stat systems before Generation 3, Tera types, Dynamax and Z-moves.",
+    "Tera types, Dynamax and Z-moves.",
     "Whether an item can be obtained in the format's specific games: only the generation it was introduced is checked (e.g. Z-Crystals are not flagged in Generation 9)."
   ];
 
@@ -297,7 +297,11 @@
       }
 
       // EVs, IVs and level
-      if (evTotal(s.evs) > MAX_EV_TOTAL) add(i, "error", `${label} has ${evTotal(s.evs)} EVs; the cap is ${MAX_EV_TOTAL}.`);
+      if ((era === null || era >= 3) && evTotal(s.evs) > MAX_EV_TOTAL) add(i, "error", `${label} has ${evTotal(s.evs)} EVs; the cap is ${MAX_EV_TOTAL}.`);
+      if (era !== null && era <= 2) {
+        if (s.evs.spa !== s.evs.spd || L.ivToDv(s.ivs.spa) !== L.ivToDv(s.ivs.spd)) add(i, "warning", `In Generation ${era}, Special Attack and Special Defense share one stat experience and DV; ${label}'s Special Attack values are used for both.`);
+        if (s.nature && L.NATURES[s.nature]) add(i, "warning", `Natures did not exist in Generation ${era}; ${label}'s ${pretty(s.nature)} nature is ignored.`);
+      }
       STAT_KEYS.forEach(k => {
         if (s.evs[k] > MAX_EV_STAT) add(i, "error", `${label} has ${s.evs[k]} ${k.toUpperCase()} EVs; the cap is ${MAX_EV_STAT} per stat.`);
         if (s.ivs[k] < 0 || s.ivs[k] > MAX_IV) add(i, "error", `${label} has an invalid ${k.toUpperCase()} IV.`);
@@ -331,6 +335,12 @@
       const picked = s.moves.filter(Boolean);
       if (new Set(picked).size !== picked.length) add(i, "error", `${label} has a duplicate move.`);
       if (picked.length < 4) add(i, "warning", `${label} has ${4 - picked.length} empty move slot(s).`);
+      if (format && format.needsLearnset && s.learn && !(s.movePool && s.movePool.length)) {
+        add(i, "error", `${label} has no learnset in ${format.name}'s games (per PokeAPI), so it is probably not obtainable there.`);
+      }
+      if (format && format.bannedSpecies && format.bannedSpecies.includes(s.species || s.name)) {
+        add(i, "error", `${label} is a mythical Pokémon and is banned in ${format.name}.`);
+      }
       if (s.movePool && s.movePool.length) {
         picked.forEach(m => {
           if (!s.movePool.includes(m)) add(i, "error", `${label} cannot learn ${pretty(m)} in ${format && format.name ? format.name : "this format"} (per PokeAPI learnsets).`);
@@ -352,7 +362,16 @@
         if (s.item) itemCount.set(s.item, (itemCount.get(s.item) || []).concat(i));
       });
       speciesCount.forEach((idx, sp) => { if (idx.length > 1) add(idx[1], "error", `Species Clause: ${pretty(sp)} appears ${idx.length} times.`); });
-      itemCount.forEach((idx, it) => { if (idx.length > 1) add(idx[1], "warning", `Item Clause: ${pretty(it)} is held by ${idx.length} Pokémon.`); });
+      itemCount.forEach((idx, it) => { if (idx.length > 1) add(idx[1], format.itemClauseError ? "error" : "warning", `Item Clause: ${pretty(it)} is held by ${idx.length} Pokémon.`); });
+      if (format.restricted) {
+        const restricted = filled.filter(({ s }) => format.restricted.species.includes(s.species || s.name));
+        if (restricted.length > format.restricted.max) {
+          add(restricted[format.restricted.max].i, "error", `${format.name} allows at most ${format.restricted.max} restricted legendary Pokémon; this team has ${restricted.length} (${restricted.map(({ s }) => pretty(s.name)).join(", ")}).`);
+        }
+      }
+      if (format.minTeam && filled.length && filled.length < format.minTeam) {
+        add(null, "warning", `${format.name} teams need at least ${format.minTeam} Pokémon: you bring up to 6 and pick ${format.bring} for each game.`);
+      }
       if (era !== null && (era === 6 || era === 7)) {
         const megas = filled.filter(({ s }) => /-mega(-|$)/.test(s.name));
         if (megas.length > 1) add(null, "warning", `Only one Pokémon can Mega Evolve per battle; this team has ${megas.length} Mega forms.`);

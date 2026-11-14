@@ -147,3 +147,60 @@ test("format filtering keeps species, forms and lookalike names separate", () =>
   assert.deepEqual(L.filterPokemon(entries, all, allowed, ["paldea"]),
     ["porygon", "charizard", "wormadam-plant", "tauros-paldea-combat-breed"]);
 });
+
+// ---- Gen 1-2 stat system ----
+test("Gen 1-2 stats match Showdown's calculator for every species, with varied DVs and stat experience", () => {
+  const calc = require("../calibration/lib.js").loadCalc();
+  const ivSets = [
+    { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
+    { hp: 0, atk: 30, def: 17, spa: 9, spd: 9, spe: 2 },
+    { hp: 0, atk: 1, def: 0, spa: 31, spd: 31, spe: 14 }
+  ];
+  const evSets = [
+    { hp: 252, atk: 252, def: 252, spa: 252, spd: 252, spe: 252 },
+    { hp: 0, atk: 100, def: 4, spa: 180, spd: 180, spe: 0 }
+  ];
+  let checked = 0;
+  for (const genNum of [1, 2]) {
+    const gen = calc.Generations.get(genNum);
+    for (const sp of gen.species) {
+      const b = sp.baseStats;
+      for (const ivs of ivSets) for (const evs of evSets) for (const level of [100, 50, 5]) {
+        const mine = L.calcAllStats({ stats: { hp: b.hp, atk: b.atk, def: b.def, spa: b.spa, spd: b.spd, spe: b.spe }, ivs, evs, level, nature: "adamant" }, genNum);
+        const theirs = new calc.Pokemon(gen, sp.name, { level, ivs, evs }).rawStats;
+        for (const k of L.STAT_KEYS) assert.equal(mine[k], theirs[k], `Gen ${genNum} ${sp.name} ${k} L${level}`);
+        checked++;
+      }
+    }
+  }
+  assert.ok(checked > 4000, `${checked} sets`);
+});
+
+test("Gen 1-2: no natures, HP DV derived, shared Special, no total EV cap", () => {
+  const slot = { stats: { hp: 60, atk: 65, def: 60, spa: 130, spd: 130, spe: 110 }, level: 100, ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 }, evs: { hp: 252, atk: 252, def: 252, spa: 252, spd: 0, spe: 252 } };
+  const a = L.calcAllStats({ ...slot, nature: "modest" }, 1), b = L.calcAllStats({ ...slot, nature: "hardy" }, 1);
+  assert.deepEqual(a, b);
+  assert.equal(a.spa, a.spd); // Special Defense follows Special Attack's stat experience
+  assert.equal(L.hpDv({ atk: 31, def: 31, spe: 31, spa: 31 }), 15);
+  assert.equal(L.hpDv({ atk: 30, def: 30, spe: 30, spa: 30 }), 15); // DV 15 is IV 30 or 31
+  assert.equal(L.hpDv({ atk: 28, def: 31, spe: 31, spa: 31 }), 7);
+  assert.equal(L.evCapFor(2), 1512);
+  assert.equal(L.evCapFor(3), 510);
+  assert.equal(L.clampEv({ hp: 252, atk: 252, def: 252 }, "spe", 252, 2).value, 252);
+  assert.equal(L.clampEv({ hp: 252, atk: 252, def: 252 }, "spe", 252, 3).value, 0);
+});
+
+test("base stats per generation from PokeAPI past_stats", () => {
+  // Real PokeAPI data: Clefable's Special Attack was 85 through Gen 5; Gen 1 had one Special stat
+  const clefable = { hp: 95, atk: 70, def: 73, spa: 95, spd: 90, spe: 60 };
+  const past = [{ gen: 1, stats: { spc: 85 } }, { gen: 5, stats: { spa: 85 } }];
+  assert.deepEqual(L.statsInGen(clefable, past, 9), clefable);
+  assert.equal(L.statsInGen(clefable, past, 5).spa, 85);
+  assert.equal(L.statsInGen(clefable, past, 2).spa, 85);
+  assert.equal(L.statsInGen(clefable, past, 2).spd, 90);
+  const g1 = L.statsInGen(clefable, past, 1);
+  assert.equal(g1.spa, 85);
+  assert.equal(g1.spd, 85);
+  // Chansey: Gen 1 Special 105 became Special Defense
+  assert.equal(L.statsInGen({ hp: 250, atk: 5, def: 5, spa: 35, spd: 105, spe: 50 }, [{ gen: 1, stats: { spc: 105 } }], 1).spa, 105);
+});

@@ -3,9 +3,11 @@ const Report = (function () {
   const { esc, formatName, TYPE_COLORS } = UI;
   const A = PokeAnalysis;
 
+  // Text colour with the higher WCAG contrast against the type colour (white fails on e.g. Fire orange)
+  const textOn = UI.textOn;
   function pill(t, cls = "") {
-    const dark = ["electric", "ground", "ice", "steel", "fairy", "normal", "grass", "bug", "flying"].includes(t);
-    return `<span class="type-pill ${cls}" style="${cls ? "" : `background:${TYPE_COLORS[t] || "#777"}; color:${dark ? "#111827" : "#fff"}`}">${esc(t)}</span>`;
+    const bg = TYPE_COLORS[t] || "#777777";
+    return `<span class="type-pill ${cls}" style="${cls ? "" : `background:${bg}; color:${textOn(bg)}`}">${esc(t)}</span>`;
   }
 
   const names = list => list.map(formatName).join(", ");
@@ -95,6 +97,11 @@ const Report = (function () {
 
     // Defense: one compact chart instead of separate weakness / resistance / immunity lists
     set("typeChart", typeChart(result));
+    // The chart scrolls sideways on narrow screens: make the region focusable so keyboard users can scroll it
+    const chart = document.getElementById("typeChart");
+    chart.setAttribute("tabindex", "0");
+    chart.setAttribute("role", "region");
+    chart.setAttribute("aria-label", "Type matchup chart (scrolls sideways on narrow screens)");
     set("sharedWeakList", result.shared.length
       ? result.shared.map(s => `<li><strong>${esc(formatName(s.type))}</strong> hits ${s.weakNames.length}: ${esc(names(s.weakNames))}<span class="evidence">${s.answers.length ? "Can take it: " + esc(names(s.answers)) : "Nothing on the team resists or is immune to it."}</span></li>`).join("")
       : "<li>No type hits two or more members super-effectively.</li>");

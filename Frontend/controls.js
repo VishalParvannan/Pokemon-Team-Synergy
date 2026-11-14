@@ -11,7 +11,6 @@ const UI = (function () {
     dragon: "#7038F8", fairy: "#EE99AC"
   };
   // Type badges use white text; these light backgrounds need dark text for contrast
-  const DARK_TEXT_TYPES = new Set(["electric", "ground", "ice", "steel", "fairy", "normal", "grass", "bug", "flying"]);
 
   // API data is untrusted: escape before putting it into HTML
   function esc(str) {
@@ -29,9 +28,20 @@ const UI = (function () {
       : `<div class="tab-icon-placeholder" style="width:${size}px; height:${size}px; ${extra}" aria-hidden="true"></div>`;
   }
 
+  // Text colour (white or near-black) with the higher WCAG contrast against a type colour
+  function luminance(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return [n >> 16, (n >> 8) & 255, n & 255].map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); })
+      .reduce((a, c, i) => a + c * [0.2126, 0.7152, 0.0722][i], 0);
+  }
+  function textOn(bg) {
+    const l = luminance(bg);
+    return 1.05 / (l + 0.05) >= (l + 0.05) / (luminance("#111827") + 0.05) ? "#fff" : "#111827";
+  }
+
   function typeBadge(t) {
-    const color = TYPE_COLORS[t] || "#777";
-    return `<span class="type-badge" style="background:${color}; color:${DARK_TEXT_TYPES.has(t) ? "#111827" : "#fff"}">${esc(t)}</span>`;
+    const color = TYPE_COLORS[t] || "#777777";
+    return `<span class="type-badge" style="background:${color}; color:${textOn(color)}">${esc(t)}</span>`;
   }
 
   function setStatus(message) {
@@ -212,5 +222,5 @@ const UI = (function () {
     return box;
   }
 
-  return { TYPE_COLORS, esc, safeSprite, spriteImg, typeBadge, setStatus, createDropdown, searchOptions, createSearchBox, createNumberField, formatName };
+  return { TYPE_COLORS, esc, safeSprite, spriteImg, typeBadge, textOn, setStatus, createDropdown, searchOptions, createSearchBox, createNumberField, formatName };
 })();

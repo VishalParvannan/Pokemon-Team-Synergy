@@ -14,17 +14,20 @@
 
   // Which usage snapshot fits a format: singles OU of the format's generation, or Gen 9 Doubles OU.
   // Returns null when no snapshot fits (doubles in older generations).
+  // Official rule sets (VGC) name their own snapshot.
   function snapshotFor(format, doubles) {
+    if (format && format.usage) return format.usage;
     const era = format && format.era ? format.era : 9;
     if (doubles) return era === 9 ? "gen9doublesou" : null;
     return `gen${era}ou`;
   }
 
   // Usage-stats set (Showdown names) -> the slot shape the damage module reads
-  function threatSlot(t) {
+  // level: the format's battle level (VGC: 50)
+  function threatSlot(t, level) {
     const evs = { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, ...(t.set.evs || {}) };
     return {
-      name: t.name, level: 100, nature: (t.set.nature || "hardy").toLowerCase(),
+      name: t.name, level: level || 100, nature: (t.set.nature || "hardy").toLowerCase(),
       ability: t.set.ability && t.set.ability !== "No Ability" ? t.set.ability : null,
       item: t.set.item, moves: t.set.moves.slice(0, 4), evs,
       ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 }
@@ -45,7 +48,7 @@
     const entries = [];
     const skipped = [];
     for (const t of snapshot.threats) {
-      const ts = threatSlot(t);
+      const ts = threatSlot(t, opts.level || snapshot.level);
       if (!D.resolveSpecies(gen, t.name)) { skipped.push(t.name); continue; }
       const threatSpeed = speedOf(gen, ts);
       const vs = members.map(m => {

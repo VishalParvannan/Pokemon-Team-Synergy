@@ -138,9 +138,10 @@
   }
 
   // ---- Speed ----
-  function speedTiers(members) {
+  // gen: the format's generation (Gen 1-2 use the old stat system)
+  function speedTiers(members, gen) {
     return members.map(m => {
-      const spe = calcAllStats(m).spe;
+      const spe = calcAllStats(m, gen).spe;
       const scarf = m.item === "choice-scarf";
       return { name: m.name, level: m.level, spe, effective: scarf ? Math.floor(spe * 1.5) : spe, note: scarf ? "with Choice Scarf" : "" };
     }).sort((a, b) => b.effective - a.effective);
@@ -313,9 +314,11 @@
       const n = pretty(m.name);
       const picked = m.moves.filter(Boolean);
       if (picked.length < 4) add("medium", `${n} has ${4 - picked.length} empty move slot(s).`);
-      if (!m.ability) add("medium", `${n} has no ability selected.`);
-      if (!m.item) add("low", `${n} has no held item.`);
-      const nat = L.NATURES[m.nature];
+      // Abilities and natures arrived in Gen 3, held items in Gen 2
+      const oldGen = ctx.gen && ctx.gen <= 2;
+      if (!m.ability && !oldGen) add("medium", `${n} has no ability selected.`);
+      if (!m.item && !(ctx.gen === 1)) add("low", `${n} has no held item.`);
+      const nat = oldGen ? null : L.NATURES[m.nature];
       if (nat && m.evs[nat[1]] > 0) add("low", `${n}'s ${pretty(m.nature)} nature lowers ${nat[1].toUpperCase()}, but ${m.evs[nat[1]]} EVs are invested there.`);
     });
 
@@ -356,8 +359,8 @@
     return {
       members: members.map(m => ({ name: m.name, sprite: m.sprite || null })),
       summary, weaknesses: list("weak"), resistances: list("resist"), immunities: list("immune"),
-      gen, viability, shared, roles, roleKeys: doubles ? ROLE_KEYS.doubles : ROLE_KEYS.singles, cov, speed: speedTiers(members), score, doubles,
-      observations: observations(members, { summary, cov, roles, shared, doubles, viability, validation: opts && opts.validation }),
+      gen, viability, shared, roles, roleKeys: doubles ? ROLE_KEYS.doubles : ROLE_KEYS.singles, cov, speed: speedTiers(members, gen), score, doubles,
+      observations: observations(members, { gen, summary, cov, roles, shared, doubles, viability, validation: opts && opts.validation }),
       assumptions: assumptions(doubles)
     };
   }

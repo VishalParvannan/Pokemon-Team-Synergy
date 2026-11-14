@@ -53,6 +53,11 @@
       types: (res.types || []).map(t => t.type.name),
       // Earlier typings: [{ gen, types }] where `types` applied up to and including `gen` (e.g. Clefable: Normal to Gen 5)
       pastTypes: (res.past_types || []).map(p => ({ gen: GEN_NUMBER[p.generation.name], types: p.types.map(t => t.type.name) })).filter(p => p.gen),
+      // Base stats that changed (e.g. Gen 6 buffs, Gen 1's single Special): [{ gen, stats: { atk: 80, spc: 85 } }]
+      pastStats: (res.past_stats || []).map(p => ({
+        gen: GEN_NUMBER[p.generation.name],
+        stats: Object.fromEntries(p.stats.map(x => [x.stat.name === "special" ? "spc" : API_STAT_MAP[x.stat.name], x.base_stat]).filter(([k]) => k))
+      })).filter(p => p.gen),
       abilities: (res.abilities || []).map(a => ({ name: a.ability.name, hidden: !!a.is_hidden })),
       stats, learn
     };
